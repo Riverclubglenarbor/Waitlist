@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getQueueWaitMinutes } from '@/lib/wait-time'
 import EmptyBoard from './EmptyBoard'
-import RcLogo from '@/components/ui/RcLogo'
+import Image from 'next/image'
 import type { Party } from '@/types'
 
 interface WaitlistBoardProps {
@@ -36,7 +36,7 @@ export default function WaitlistBoard({ avgMinPerHole }: WaitlistBoardProps) {
   return (
     <div className="h-screen bg-rc-navy flex flex-col px-16 py-10 gap-8">
       <div className="flex items-center justify-between">
-        <RcLogo variant="mark-only" className="text-4xl" />
+        <Image src="/rc-logo.png" alt="River Club Glen Arbor" width={220} height={100} className="object-contain" />
         <div className="text-center">
           <p className="text-white/60 text-xl uppercase tracking-widest">Current Wait Time</p>
           <p className="text-rc-green text-8xl font-black leading-none">
