@@ -1,30 +1,28 @@
 'use client'
-import { useState } from 'react'
 import CheckinWizard from '@/components/checkin/CheckinWizard'
 import QueueView from '@/components/checkin/QueueView'
 
-type Tab = 'checkin' | 'queue'
-
 export default function CheckinPage() {
-  const [tab, setTab] = useState<Tab>('checkin')
-
   return (
-    <div className="h-screen flex flex-col bg-rc-navy">
-      <div className="flex border-b border-white/10">
-        {(['checkin', 'queue'] as Tab[]).map(t => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-8 py-4 text-lg font-bold capitalize transition-colors
-              ${tab === t ? 'text-rc-green border-b-2 border-rc-green' : 'text-white/50'}`}
-          >
-            {t === 'checkin' ? 'Check In' : 'Queue'}
-          </button>
-        ))}
+    <div className="h-screen flex bg-rc-navy overflow-hidden">
+      {/* Left: live queue */}
+      <div className="flex-1 flex flex-col border-r border-white/10 overflow-hidden">
+        <div className="px-6 py-4 border-b border-white/10">
+          <h2 className="text-rc-green text-lg font-bold uppercase tracking-widest">Queue</h2>
+        </div>
+        <div className="flex-1 overflow-auto p-6">
+          <QueueView />
+        </div>
       </div>
-      <div className="flex-1 overflow-auto p-6">
-        {tab === 'checkin' && <CheckinWizard onSuccess={() => setTab('queue')} />}
-        {tab === 'queue' && <QueueView />}
+
+      {/* Right: add a Par-Tee */}
+      <div className="w-[420px] flex flex-col overflow-hidden">
+        <div className="px-6 py-4 border-b border-white/10">
+          <h2 className="text-rc-green text-lg font-bold uppercase tracking-widest">Add Par-Tee</h2>
+        </div>
+        <div className="flex-1 overflow-auto p-6">
+          <CheckinWizard onSuccess={() => {}} />
+        </div>
       </div>
     </div>
   )
