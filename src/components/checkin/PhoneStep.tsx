@@ -9,6 +9,7 @@ interface PhoneStepProps {
 
 export default function PhoneStep({ onSubmit, onBack, loading }: PhoneStepProps) {
   const [value, setValue] = useState('')
+  const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { inputRef.current?.focus() }, [])
@@ -22,24 +23,39 @@ export default function PhoneStep({ onSubmit, onBack, loading }: PhoneStepProps)
     return raw.replace(/\D/g, '').length >= 10
   }
 
+  function submit() {
+    if (!isValid(value)) {
+      setError('Please enter a valid 10-digit phone number')
+      return
+    }
+    setError('')
+    onSubmit(toE164(value))
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (isValid(value)) onSubmit(toE164(value))
+    submit()
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') submit()
   }
 
   return (
     <div className="flex flex-col items-center justify-center h-full gap-8">
       <h2 className="text-white text-3xl font-bold">Phone Number for Texts?</h2>
-      <form onSubmit={handleSubmit} className="flex flex-col items-center gap-6 w-full max-w-sm">
+      <form onSubmit={handleSubmit} className="flex flex-col items-center gap-4 w-full max-w-sm">
         <input
           ref={inputRef}
           type="tel"
           value={value}
-          onChange={e => setValue(e.target.value)}
+          onChange={e => { setValue(e.target.value); setError('') }}
+          onKeyDown={handleKeyDown}
           placeholder="(231) 555-0100"
           className="w-full text-center text-3xl p-4 rounded-xl border-4 border-rc-green
                      bg-white text-rc-navy outline-none"
         />
+        {error && <p className="text-red-400 text-sm">{error}</p>}
         <button
           type="submit"
           disabled={!isValid(value) || loading}

@@ -34,27 +34,35 @@ export default function WaitlistBoard({ avgMinPerHole }: WaitlistBoardProps) {
   const totalWait = Math.round(getQueueWaitMinutes(parties, avgMinPerHole))
 
   return (
-    <div className="h-screen bg-rc-navy flex flex-col px-16 py-10 gap-8">
-      <div className="flex items-center justify-between">
-        <Image src="/rc-logo.png" alt="River Club Glen Arbor" width={220} height={100} className="object-contain" />
-        <div className="text-center">
-          <p className="text-white/60 text-xl uppercase tracking-widest">Current Wait Time</p>
-          <p className="text-rc-green text-8xl font-black leading-none">
-            {totalWait}
-            <span className="text-4xl font-normal text-white/70 ml-2">min</span>
-          </p>
-        </div>
-        <p className="text-rc-green text-xl font-bold italic">putt · party · eat · repeat</p>
+    <div className="min-h-screen bg-rc-navy flex flex-col items-center px-8 py-10 gap-8">
+      {/* Logo */}
+      <Image
+        src="/rc-logo.png"
+        alt="River Club Glen Arbor"
+        width={340}
+        height={150}
+        className="object-contain"
+      />
+
+      {/* Wait time hero */}
+      <div className="w-full bg-rc-green/10 border-2 border-rc-green rounded-3xl py-8 px-6 text-center">
+        <p className="text-white/60 text-2xl uppercase tracking-widest mb-2">Current Wait</p>
+        <p className="text-rc-green font-black leading-none" style={{ fontSize: '7rem' }}>
+          {totalWait}
+          <span className="text-4xl font-normal text-white/70 ml-3">min</span>
+        </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-8 text-rc-green text-xl uppercase tracking-widest border-b-2 border-rc-green/40 pb-4">
+      {/* Queue header */}
+      <div className="w-full grid grid-cols-[3rem_1fr_6rem] gap-4 text-rc-green text-lg uppercase tracking-widest border-b-2 border-rc-green/40 pb-3 px-2">
         <span>#</span>
         <span>Par-Tee</span>
-        <span>Est. Wait</span>
+        <span className="text-right">Wait</span>
       </div>
 
-      <div className="flex flex-col gap-4 overflow-hidden">
-        {parties.slice(0, 8).map((party, i) => {
+      {/* Queue rows */}
+      <div className="w-full flex flex-col gap-3">
+        {parties.slice(0, 10).map((party, i) => {
           const waitAhead = parties
             .slice(0, i)
             .reduce((sum, p) => sum + avgMinPerHole * p.party_size, 0)
@@ -63,23 +71,32 @@ export default function WaitlistBoard({ avgMinPerHole }: WaitlistBoardProps) {
           return (
             <div
               key={party.id}
-              className={`grid grid-cols-3 gap-8 py-4 rounded-2xl px-6
-                ${i === 0 ? 'bg-rc-green/20 border border-rc-green' : 'bg-white/5'}`}
+              className={`grid grid-cols-[3rem_1fr_6rem] gap-4 items-center py-5 px-4 rounded-2xl
+                ${i === 0 ? 'bg-rc-green/20 border-2 border-rc-green' : 'bg-white/5'}`}
             >
-              <span className="text-rc-green text-5xl font-black">{i + 1}</span>
-              <span className="text-white text-5xl font-bold">
+              <span className={`text-4xl font-black ${i === 0 ? 'text-rc-green' : 'text-white/40'}`}>
+                {i + 1}
+              </span>
+              <span className="text-white text-4xl font-bold truncate">
                 {party.first_name} {party.last_initial}.
               </span>
-              <span className="text-white text-5xl font-bold">
+              <span className="text-right text-3xl font-bold">
                 {wait === 0 ? (
-                  <span className="text-rc-green animate-pulse">Now! ⛳</span>
+                  <span className="text-rc-green animate-pulse">Now!</span>
                 ) : (
-                  `${wait} min`
+                  <span className="text-white/80">{wait}m</span>
                 )}
               </span>
             </div>
           )
         })}
+      </div>
+
+      {/* Tagline footer */}
+      <div className="mt-auto pt-4">
+        <p className="text-rc-green/60 text-xl font-bold tracking-widest uppercase text-center">
+          putt · party · eat · repeat
+        </p>
       </div>
     </div>
   )

@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import RcLogo from '@/components/ui/RcLogo'
+import Image from 'next/image'
 
 const ROTATING_MESSAGES = [
   "No wait — it's your time to shine! ⛳",
@@ -21,7 +21,7 @@ export default function EmptyBoard() {
 
   return (
     <div className="h-screen bg-rc-navy flex flex-col items-center justify-center gap-12 px-16">
-      <RcLogo className="scale-150" />
+      <Image src="/rc-logo.png" alt="River Club Glen Arbor" width={360} height={160} className="object-contain" />
       <div key={msgIndex} className="text-center animate-fade-in">
         <p className="text-white text-6xl font-black leading-tight max-w-3xl text-center">
           {ROTATING_MESSAGES[msgIndex]}
