@@ -21,6 +21,7 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
   const [step, setStep] = useState<Step>('name')
   const [loading, setLoading] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
   const [state, setState] = useState<WizardState>({
     firstName: '',
     lastInitial: '',
@@ -29,6 +30,7 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
 
   async function handlePhoneSubmit(phone: string) {
     setLoading(true)
+    setErrorMsg('')
     try {
       const res = await fetch('/api/parties', {
         method: 'POST',
@@ -40,7 +42,11 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
           phone,
         }),
       })
-      if (!res.ok) throw new Error('Failed to add party')
+      if (!res.ok) {
+        const data = await res.json()
+        setErrorMsg(data.error ?? 'Failed to add party')
+        return
+      }
       setConfirmed(true)
       onSuccess()
       setTimeout(() => {
@@ -48,6 +54,8 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
         setStep('name')
         setState({ firstName: '', lastInitial: '', partySize: 1 })
       }, 1500)
+    } catch {
+      setErrorMsg('Network error — check connection')
     } finally {
       setLoading(false)
     }
@@ -60,6 +68,21 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
           <div className="text-rc-green text-6xl mb-4">✓</div>
           <div className="text-rc-navy text-2xl font-bold">Par-Tee Added!</div>
         </div>
+      </div>
+    )
+  }
+
+  if (errorMsg) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-6">
+        <div className="text-red-500 text-5xl">⚠️</div>
+        <p className="text-rc-navy text-xl font-semibold text-center max-w-xs">{errorMsg}</p>
+        <button
+          onClick={() => { setErrorMsg(''); setStep('name'); setState({ firstName: '', lastInitial: '', partySize: 1 }) }}
+          className="bg-rc-green text-white px-8 py-3 rounded-xl font-bold"
+        >
+          Try Again
+        </button>
       </div>
     )
   }

@@ -1,9 +1,6 @@
 import type { Metadata } from 'next'
-import { Inter, Montserrat } from 'next/font/google'
+import { inter, montserrat } from '@/lib/fonts'
 import './globals.css'
-
-const inter = Inter({ subsets: ['latin'] })
-export const montserrat = Montserrat({ subsets: ['latin'], variable: '--font-montserrat' })
 
 export const metadata: Metadata = {
   title: 'River Club — Waitlist',
