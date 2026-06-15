@@ -26,6 +26,7 @@ export default function NameStep({ onNext }: NameStepProps) {
           value={value}
           onChange={e => setValue(e.target.value)}
           placeholder="e.g. Sarah"
+          autoCapitalize="words"
           className="w-full text-center text-3xl p-4 rounded-xl border-4 border-rc-green
                      bg-white text-rc-navy outline-none focus:border-green-400"
         />
