@@ -7,9 +7,9 @@ export default function CheckinPage() {
   return (
     <div className="h-screen flex flex-col bg-[#f5f8f4] overflow-hidden">
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200 shrink-0">
-        <Image src="/putt-party.png" alt="putt · party · eat · repeat" width={180} height={44} className="object-contain" />
-        <span className="text-slate-400 text-sm font-medium uppercase tracking-widest">Waitlist</span>
+      <header className="flex items-center justify-between px-6 bg-white border-b border-slate-200 shrink-0" style={{ height: 56 }}>
+        <Image src="/putt-party.png" alt="putt · party · eat · repeat" width={160} height={32} className="object-contain block" style={{ maxHeight: 32 }} />
+        <span className="text-slate-400 text-sm font-medium uppercase tracking-widest leading-none">Waitlist</span>
       </header>
 
       {/* Body */}
