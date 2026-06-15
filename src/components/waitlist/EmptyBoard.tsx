@@ -23,7 +23,7 @@ export default function EmptyBoard() {
     <div className="h-screen bg-rc-navy flex flex-col items-center justify-center gap-12 px-16">
       <Image src="/rc-logo.png" alt="River Club Glen Arbor" width={360} height={160} className="object-contain" />
       <div key={msgIndex} className="text-center animate-fade-in">
-        <p className="text-white text-6xl font-black leading-tight max-w-3xl text-center">
+        <p className="text-white text-6xl font-black leading-tight max-w-3xl text-center" style={{ fontFamily: 'var(--font-montserrat), sans-serif' }}>
           {ROTATING_MESSAGES[msgIndex]}
         </p>
       </div>
