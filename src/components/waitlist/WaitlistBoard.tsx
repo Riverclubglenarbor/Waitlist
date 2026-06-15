@@ -20,7 +20,8 @@ export default function WaitlistBoard({ avgMinPerHole }: WaitlistBoardProps) {
       .channel('waitlist-board')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'parties' }, fetchParties)
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    const poll = setInterval(fetchParties, 15000)
+    return () => { supabase.removeChannel(channel); clearInterval(poll) }
   }, [])
 
   async function fetchParties() {
@@ -54,8 +55,7 @@ export default function WaitlistBoard({ avgMinPerHole }: WaitlistBoardProps) {
       </div>
 
       {/* Queue header */}
-      <div className="w-full grid grid-cols-[3rem_1fr_6rem] gap-4 text-rc-green text-lg uppercase tracking-widest border-b-2 border-rc-green/40 pb-3 px-2">
-        <span>#</span>
+      <div className="w-full grid grid-cols-[1fr_6rem] gap-4 text-rc-green text-lg uppercase tracking-widest border-b-2 border-rc-green/40 pb-3 px-4">
         <span>Par-Tee</span>
         <span className="text-right">Wait</span>
       </div>
@@ -71,12 +71,9 @@ export default function WaitlistBoard({ avgMinPerHole }: WaitlistBoardProps) {
           return (
             <div
               key={party.id}
-              className={`grid grid-cols-[3rem_1fr_6rem] gap-4 items-center py-5 px-4 rounded-2xl
+              className={`grid grid-cols-[1fr_6rem] gap-4 items-center py-5 px-4 rounded-2xl
                 ${i === 0 ? 'bg-rc-green/20 border-2 border-rc-green' : 'bg-white/5'}`}
             >
-              <span className={`text-4xl font-black ${i === 0 ? 'text-rc-green' : 'text-white/40'}`}>
-                {i + 1}
-              </span>
               <span className="text-white text-4xl font-bold truncate">
                 {party.first_name} {party.last_initial}.
               </span>

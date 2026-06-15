@@ -5,7 +5,11 @@ import type { Party } from '@/types'
 
 type ActionState = { id: string; type: 'checkin' | 'resend' | 'noshow' | 'remove' } | null
 
-export default function QueueView() {
+interface QueueViewProps {
+  refreshKey?: number
+}
+
+export default function QueueView({ refreshKey }: QueueViewProps) {
   const [parties, setParties] = useState<Party[]>([])
   const [loading, setLoading] = useState<ActionState>(null)
   const [flash, setFlash] = useState<{ id: string; type: 'success' | 'error'; msg: string } | null>(null)
@@ -17,8 +21,14 @@ export default function QueueView() {
       .channel('queue-view')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'parties' }, fetchParties)
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    const poll = setInterval(fetchParties, 15000)
+    return () => { supabase.removeChannel(channel); clearInterval(poll) }
   }, [])
+
+  // Refresh when parent signals (e.g. after adding a party)
+  useEffect(() => {
+    if (refreshKey !== undefined) fetchParties()
+  }, [refreshKey])
 
   async function fetchParties() {
     const res = await fetch('/api/parties')

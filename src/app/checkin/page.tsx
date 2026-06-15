@@ -1,9 +1,13 @@
 'use client'
+import { useState, useCallback } from 'react'
 import Image from 'next/image'
 import CheckinWizard from '@/components/checkin/CheckinWizard'
 import QueueView from '@/components/checkin/QueueView'
 
 export default function CheckinPage() {
+  const [refreshKey, setRefreshKey] = useState(0)
+  const refresh = useCallback(() => setRefreshKey(k => k + 1), [])
+
   return (
     <div className="h-screen flex flex-col bg-[#f5f8f4] overflow-hidden">
       {/* Header */}
@@ -20,7 +24,7 @@ export default function CheckinPage() {
             <h2 className="text-rc-navy text-base font-bold uppercase tracking-widest">Queue</h2>
           </div>
           <div className="flex-1 overflow-auto p-5 bg-[#f5f8f4]">
-            <QueueView />
+            <QueueView refreshKey={refreshKey} />
           </div>
         </div>
 
@@ -30,7 +34,7 @@ export default function CheckinPage() {
             <h2 className="text-rc-navy text-base font-bold uppercase tracking-widest">Add Par-Tee</h2>
           </div>
           <div className="flex-1 overflow-auto">
-            <CheckinWizard onSuccess={() => {}} />
+            <CheckinWizard onSuccess={refresh} />
           </div>
         </div>
       </div>
