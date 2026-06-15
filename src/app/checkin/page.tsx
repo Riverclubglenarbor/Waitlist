@@ -8,7 +8,7 @@ export default function CheckinPage() {
     <div className="h-screen flex flex-col bg-[#f5f8f4] overflow-hidden">
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200 shrink-0">
-        <Image src="/rc-logo.png" alt="River Club" width={120} height={52} className="object-contain" />
+        <Image src="/putt-party.png" alt="putt · party · eat · repeat" width={180} height={44} className="object-contain" />
         <span className="text-slate-400 text-sm font-medium uppercase tracking-widest">Waitlist</span>
       </header>
 
