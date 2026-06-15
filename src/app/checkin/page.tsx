@@ -5,7 +5,7 @@ import QueueView from '@/components/checkin/QueueView'
 
 export default function CheckinPage() {
   return (
-    <div className="h-screen flex flex-col bg-slate-50 overflow-hidden">
+    <div className="h-screen flex flex-col bg-[#f5f8f4] overflow-hidden">
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200 shrink-0">
         <Image src="/rc-logo.png" alt="River Club" width={120} height={52} className="object-contain" />
@@ -19,7 +19,7 @@ export default function CheckinPage() {
           <div className="px-6 py-4 bg-white border-b border-slate-100 shrink-0">
             <h2 className="text-rc-navy text-base font-bold uppercase tracking-widest">Queue</h2>
           </div>
-          <div className="flex-1 overflow-auto p-5">
+          <div className="flex-1 overflow-auto p-5 bg-[#f5f8f4]">
             <QueueView />
           </div>
         </div>
