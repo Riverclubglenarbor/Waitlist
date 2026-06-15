@@ -6,28 +6,32 @@ import EmptyBoard from './EmptyBoard'
 import Image from 'next/image'
 import type { Party } from '@/types'
 
-interface WaitlistBoardProps {
-  avgMinPerHole: number
-}
-
-export default function WaitlistBoard({ avgMinPerHole }: WaitlistBoardProps) {
+export default function WaitlistBoard() {
   const [parties, setParties] = useState<Party[]>([])
+  const [avgMinPerHole, setAvgMinPerHole] = useState(2.5)
 
   useEffect(() => {
-    fetchParties()
+    fetchAll()
     const supabase = createClient()
     const channel = supabase
       .channel('waitlist-board')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'parties' }, fetchParties)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'parties' }, fetchAll)
       .subscribe()
-    const poll = setInterval(fetchParties, 15000)
+    const poll = setInterval(fetchAll, 15000)
     return () => { supabase.removeChannel(channel); clearInterval(poll) }
   }, [])
 
-  async function fetchParties() {
-    const res = await fetch('/api/parties')
-    const data = await res.json()
-    setParties(data)
+  async function fetchAll() {
+    const [partiesRes, settingsRes] = await Promise.all([
+      fetch('/api/parties'),
+      fetch('/api/settings'),
+    ])
+    const partiesData = await partiesRes.json()
+    const settingsData = await settingsRes.json()
+    setParties(partiesData)
+    if (settingsData.avg_min_per_hole) {
+      setAvgMinPerHole(parseFloat(settingsData.avg_min_per_hole))
+    }
   }
 
   if (parties.length === 0) return <EmptyBoard />
