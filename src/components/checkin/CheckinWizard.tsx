@@ -58,7 +58,7 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <div className="text-rc-green text-6xl mb-4">✓</div>
-          <div className="text-white text-2xl font-bold">Par-Tee Added!</div>
+          <div className="text-rc-navy text-2xl font-bold">Par-Tee Added!</div>
         </div>
       </div>
     )

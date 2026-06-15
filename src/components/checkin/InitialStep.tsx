@@ -28,7 +28,7 @@ export default function InitialStep({ firstName, onNext, onBack }: InitialStepPr
 
   return (
     <div className="flex flex-col items-center justify-center h-full gap-8">
-      <h2 className="text-white text-3xl font-bold">Last Initial, {firstName}?</h2>
+      <h2 className="text-rc-navy text-3xl font-bold">Last Initial, {firstName}?</h2>
       <input
         ref={inputRef}
         value={value}
@@ -42,12 +42,12 @@ export default function InitialStep({ firstName, onNext, onBack }: InitialStepPr
       <button
         onClick={handleSubmit}
         disabled={!value}
-        className="bg-rc-green text-white px-10 py-4 rounded-xl text-xl font-bold
+        className="bg-rc-green text-rc-navy px-10 py-4 rounded-xl text-xl font-bold
                    disabled:opacity-40 disabled:cursor-not-allowed"
       >
         Next →
       </button>
-      <button onClick={onBack} className="text-white/60 text-lg underline">
+      <button onClick={onBack} className="text-slate-400 text-lg underline">
         ← Back
       </button>
     </div>

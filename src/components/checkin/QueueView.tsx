@@ -3,8 +3,12 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import type { Party } from '@/types'
 
+type ActionState = { id: string; type: 'checkin' | 'resend' | 'noshow' | 'remove' } | null
+
 export default function QueueView() {
   const [parties, setParties] = useState<Party[]>([])
+  const [loading, setLoading] = useState<ActionState>(null)
+  const [flash, setFlash] = useState<{ id: string; type: 'success' | 'error'; msg: string } | null>(null)
 
   useEffect(() => {
     fetchParties()
@@ -22,71 +26,147 @@ export default function QueueView() {
     setParties(data)
   }
 
-  async function updateStatus(id: string, status: Party['status']) {
+  function showFlash(id: string, type: 'success' | 'error', msg: string) {
+    setFlash({ id, type, msg })
+    setTimeout(() => setFlash(null), 2500)
+  }
+
+  async function checkIn(id: string) {
+    setLoading({ id, type: 'checkin' })
     await fetch(`/api/parties/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status: 'playing' }),
     })
+    setLoading(null)
+    fetchParties()
+  }
+
+  async function resend(id: string) {
+    setLoading({ id, type: 'resend' })
+    const res = await fetch(`/api/parties/${id}/resend`, { method: 'POST' })
+    setLoading(null)
+    if (res.ok) {
+      showFlash(id, 'success', 'Text sent!')
+    } else {
+      showFlash(id, 'error', 'Failed to send')
+    }
+  }
+
+  async function noShow(id: string) {
+    setLoading({ id, type: 'noshow' })
+    await fetch(`/api/parties/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'no_show' }),
+    })
+    setLoading(null)
+    fetchParties()
+  }
+
+  async function remove(id: string) {
+    setLoading({ id, type: 'remove' })
+    await fetch(`/api/parties/${id}`, { method: 'DELETE' })
+    setLoading(null)
     fetchParties()
   }
 
   if (parties.length === 0) {
-    return <p className="text-white/60 text-center mt-12 text-xl">No Par-Tees in queue</p>
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-20">
+        <span className="text-5xl">⛳</span>
+        <p className="text-slate-400 text-lg font-medium">No Par-Tees in queue</p>
+        <p className="text-slate-300 text-sm">Add a group using the form →</p>
+      </div>
+    )
   }
 
   return (
-    <div className="overflow-auto">
-      <table className="w-full text-white text-left">
-        <thead>
-          <tr className="text-rc-green border-b border-white/20 text-sm uppercase tracking-wider">
-            <th className="py-3 px-4">#</th>
-            <th className="py-3 px-4">Name</th>
-            <th className="py-3 px-4">Size</th>
-            <th className="py-3 px-4">Status</th>
-            <th className="py-3 px-4">Notes</th>
-            <th className="py-3 px-4">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {parties.map((party, i) => (
-            <tr key={party.id} className="border-b border-white/10 hover:bg-white/5">
-              <td className="py-4 px-4 text-rc-green font-bold">{i + 1}</td>
-              <td className="py-4 px-4 font-semibold">
-                {party.first_name} {party.last_initial}.
-              </td>
-              <td className="py-4 px-4">{party.party_size}</td>
-              <td className="py-4 px-4">
-                <span className={`px-2 py-1 rounded text-xs font-bold uppercase
-                  ${party.status === 'notified' ? 'bg-yellow-500 text-black' : 'bg-rc-green text-white'}`}>
-                  {party.status}
-                </span>
-              </td>
-              <td className="py-4 px-4 text-white/60 text-sm">{party.notes ?? '—'}</td>
-              <td className="py-4 px-4 flex gap-2">
+    <div className="flex flex-col gap-3">
+      {parties.map((party, i) => {
+        const isLoading = loading?.id === party.id
+        const partyFlash = flash?.id === party.id ? flash : null
+
+        return (
+          <div
+            key={party.id}
+            className={`bg-white rounded-2xl border transition-all duration-200
+              ${i === 0 ? 'border-rc-green shadow-md shadow-rc-green/10' : 'border-slate-200 shadow-sm'}`}
+          >
+            <div className="flex items-center gap-4 px-5 py-4">
+              {/* Position */}
+              <span className={`text-3xl font-black w-8 shrink-0
+                ${i === 0 ? 'text-rc-green' : 'text-slate-300'}`}>
+                {i + 1}
+              </span>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className="text-rc-navy text-xl font-bold truncate">
+                  {party.first_name} {party.last_initial}.
+                </p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-slate-400 text-sm">{party.party_size} {party.party_size === 1 ? 'person' : 'people'}</span>
+                  <span className="text-slate-200">·</span>
+                  <span className={`text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full
+                    ${party.status === 'notified' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                    {party.status}
+                  </span>
+                  {partyFlash && (
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full transition-opacity
+                      ${partyFlash.type === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                      {partyFlash.msg}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 shrink-0">
                 <button
-                  onClick={() => updateStatus(party.id, 'playing')}
-                  className="bg-rc-green text-white px-3 py-1 rounded text-sm font-bold"
+                  onClick={() => checkIn(party.id)}
+                  disabled={!!loading}
+                  className="flex items-center gap-1.5 bg-rc-green text-white text-sm font-bold
+                             px-4 py-2 rounded-xl transition-all duration-150
+                             hover:bg-green-500 active:scale-[0.97] disabled:opacity-40"
                 >
-                  Playing
+                  {isLoading && loading?.type === 'checkin' ? '…' : '✓ Check In'}
                 </button>
+
                 <button
-                  onClick={() => updateStatus(party.id, 'no_show')}
-                  className="bg-yellow-500 text-black px-3 py-1 rounded text-sm font-bold"
+                  onClick={() => resend(party.id)}
+                  disabled={!!loading}
+                  className="flex items-center gap-1.5 border border-rc-navy text-rc-navy text-sm font-semibold
+                             px-3 py-2 rounded-xl transition-all duration-150
+                             hover:bg-rc-navy hover:text-white active:scale-[0.97] disabled:opacity-40"
                 >
-                  No Show
+                  {isLoading && loading?.type === 'resend' ? '…' : '↩ Resend'}
                 </button>
+
                 <button
-                  onClick={() => updateStatus(party.id, 'removed')}
-                  className="bg-red-600 text-white px-3 py-1 rounded text-sm font-bold"
+                  onClick={() => noShow(party.id)}
+                  disabled={!!loading}
+                  className="border border-amber-400 text-amber-600 text-sm font-semibold
+                             px-3 py-2 rounded-xl transition-all duration-150
+                             hover:bg-amber-50 active:scale-[0.97] disabled:opacity-40"
                 >
-                  Remove
+                  {isLoading && loading?.type === 'noshow' ? '…' : 'No Show'}
                 </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+
+                <button
+                  onClick={() => remove(party.id)}
+                  disabled={!!loading}
+                  className="text-red-400 text-sm font-semibold px-2 py-2 rounded-xl
+                             transition-all duration-150 hover:text-red-600 hover:bg-red-50
+                             active:scale-[0.97] disabled:opacity-40"
+                >
+                  {isLoading && loading?.type === 'remove' ? '…' : 'Remove'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

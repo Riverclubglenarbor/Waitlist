@@ -10,7 +10,7 @@ const SIZES = [1, 2, 3, 4, 5, 6, 7, 8]
 export default function PartySizeStep({ onNext, onBack }: PartySizeStepProps) {
   return (
     <div className="flex flex-col items-center justify-center h-full gap-8">
-      <h2 className="text-white text-3xl font-bold">Party Size?</h2>
+      <h2 className="text-rc-navy text-3xl font-bold">Party Size?</h2>
       <div className="grid grid-cols-4 gap-4">
         {SIZES.map(n => (
           <button
@@ -30,7 +30,7 @@ export default function PartySizeStep({ onNext, onBack }: PartySizeStepProps) {
           9+ Large Group
         </button>
       </div>
-      <button onClick={onBack} className="text-white/60 text-lg underline">
+      <button onClick={onBack} className="text-slate-400 text-lg underline">
         ← Back
       </button>
     </div>

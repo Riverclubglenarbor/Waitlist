@@ -43,7 +43,7 @@ export default function PhoneStep({ onSubmit, onBack, loading }: PhoneStepProps)
 
   return (
     <div className="flex flex-col items-center justify-center h-full gap-8">
-      <h2 className="text-white text-3xl font-bold">Phone Number for Texts?</h2>
+      <h2 className="text-rc-navy text-3xl font-bold">Phone Number for Texts?</h2>
       <form onSubmit={handleSubmit} className="flex flex-col items-center gap-4 w-full max-w-sm">
         <input
           ref={inputRef}
@@ -64,7 +64,7 @@ export default function PhoneStep({ onSubmit, onBack, loading }: PhoneStepProps)
           {loading ? 'Adding…' : 'Add to Queue ⛳'}
         </button>
       </form>
-      <button onClick={onBack} className="text-white/60 text-lg underline">
+      <button onClick={onBack} className="text-slate-400 text-lg underline">
         ← Back
       </button>
     </div>

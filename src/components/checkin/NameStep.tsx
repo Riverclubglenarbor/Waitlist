@@ -18,7 +18,7 @@ export default function NameStep({ onNext }: NameStepProps) {
 
   return (
     <div className="flex flex-col items-center justify-center h-full gap-8">
-      <h2 className="text-white text-3xl font-bold">First Name?</h2>
+      <h2 className="text-rc-navy text-3xl font-bold">First Name?</h2>
       <form onSubmit={handleSubmit} className="flex flex-col items-center gap-6 w-full max-w-sm">
         <input
           ref={inputRef}
@@ -31,7 +31,7 @@ export default function NameStep({ onNext }: NameStepProps) {
         <button
           type="submit"
           disabled={!value.trim()}
-          className="bg-rc-green disabled:opacity-40 text-white px-12 py-4 rounded-xl text-2xl font-bold w-full"
+          className="bg-rc-green disabled:opacity-40 text-rc-navy px-12 py-4 rounded-xl text-2xl font-bold w-full"
         >
           Next →
         </button>
