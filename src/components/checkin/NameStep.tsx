@@ -13,7 +13,8 @@ export default function NameStep({ onNext }: NameStepProps) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (value.trim()) onNext(value.trim())
+    const name = value.trim()
+    if (name) onNext(name.charAt(0).toUpperCase() + name.slice(1))
   }
 
   return (
