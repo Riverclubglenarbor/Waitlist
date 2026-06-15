@@ -40,9 +40,10 @@ export async function POST(request: Request) {
     .from('parties')
     .select('*')
     .in('status', ['waiting', 'notified'])
-  const avgMinPerHole = parseFloat(settings.avg_min_per_hole ?? '2.5')
+  const smallRate = parseFloat(settings.avg_min_per_hole_small ?? settings.avg_min_per_hole ?? '4')
+  const largeRate = parseFloat(settings.avg_min_per_hole_large ?? settings.avg_min_per_hole ?? '5')
   const allActive: Party[] = activeParties ?? []
-  const waitMinutes = Math.round(getQueueWaitMinutes(allActive, avgMinPerHole))
+  const waitMinutes = Math.round(getQueueWaitMinutes(allActive, smallRate, largeRate))
 
   // Split party into groups of MAX_GROUP_SIZE
   const groups: { size: number; label: string }[] = []
@@ -59,6 +60,7 @@ export async function POST(request: Request) {
       groupNum++
     }
   }
+
 
   // Insert all groups
   const inserted: Party[] = []

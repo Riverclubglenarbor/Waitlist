@@ -29,22 +29,24 @@ function interpolate(template: string, vars: Record<string, string | number>): s
 
 function calculateWaitMinutes(
   parties: Pick<Party, 'party_size'>[],
-  avgMinPerHole: number
+  smallRate: number,
+  largeRate: number
 ): number {
-  return parties.reduce((total, p) => total + avgMinPerHole * p.party_size, 0)
+  return parties.reduce((total, p) => total + (p.party_size >= 5 ? largeRate : smallRate) * p.party_size, 0)
 }
 
 function getEstimatedTeeTime(
   party: Party,
   allParties: Party[],
-  avgMinPerHole: number
+  smallRate: number,
+  largeRate: number
 ): Date {
   const ahead = allParties.filter(
     p =>
       (p.status === 'waiting' || p.status === 'notified') &&
       p.checked_in_at < party.checked_in_at
   )
-  const waitMs = calculateWaitMinutes(ahead, avgMinPerHole) * 60_000
+  const waitMs = calculateWaitMinutes(ahead, smallRate, largeRate) * 60_000
   return new Date(Date.now() + waitMs)
 }
 
@@ -75,7 +77,8 @@ Deno.serve(async () => {
   const settings: Settings = Object.fromEntries(
     (settingsRows ?? []).map((r: { key: string; value: string }) => [r.key, r.value])
   )
-  const avgMinPerHole = parseFloat(settings.avg_min_per_hole ?? '2.5')
+  const smallRate = parseFloat(settings.avg_min_per_hole_small ?? settings.avg_min_per_hole ?? '4')
+  const largeRate = parseFloat(settings.avg_min_per_hole_large ?? settings.avg_min_per_hole ?? '5')
   const leadMinutes = parseFloat(settings.notification_lead_minutes ?? '3')
   const noShowMinutes = parseFloat(settings.no_show_timeout_minutes ?? '10')
 
@@ -106,7 +109,7 @@ Deno.serve(async () => {
   const results: string[] = []
 
   for (const party of parties) {
-    const estimatedTeeTime = getEstimatedTeeTime(party, parties, avgMinPerHole)
+    const estimatedTeeTime = getEstimatedTeeTime(party, parties, smallRate, largeRate)
     const minutesUntilTee = (estimatedTeeTime.getTime() - now.getTime()) / 60_000
 
     if (party.status === 'waiting' && minutesUntilTee <= leadMinutes) {

@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react'
 import type { Settings } from '@/types'
 
 const FIELD_LABELS: Record<string, string> = {
-  avg_min_per_hole: 'Avg Minutes Per Hole (affects wait times & SMS timing)',
+  avg_min_per_hole_small: 'Min Per Hole — Small Group (1–4 players)',
+  avg_min_per_hole_large: 'Min Per Hole — Large Group (5–6 players)',
   notification_lead_minutes: 'SMS Lead Time (min before tee)',
   no_show_timeout_minutes: 'No-Show Timeout (min after notify)',
   queue_close_time: 'Queue Close Time (HH:MM)',

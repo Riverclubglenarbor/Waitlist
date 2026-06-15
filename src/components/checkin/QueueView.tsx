@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import type { Party } from '@/types'
 
@@ -14,27 +14,26 @@ export default function QueueView({ refreshKey }: QueueViewProps) {
   const [loading, setLoading] = useState<ActionState>(null)
   const [flash, setFlash] = useState<{ id: string; type: 'success' | 'error'; msg: string } | null>(null)
 
+  const fetchParties = useCallback(async () => {
+    const res = await fetch('/api/parties')
+    const data = await res.json()
+    if (Array.isArray(data)) setParties(data)
+  }, [])
+
   useEffect(() => {
     fetchParties()
     const supabase = createClient()
     const channel = supabase
       .channel('queue-view')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'parties' }, fetchParties)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'parties' }, () => fetchParties())
       .subscribe()
-    const poll = setInterval(fetchParties, 15000)
+    const poll = setInterval(() => fetchParties(), 3000)
     return () => { supabase.removeChannel(channel); clearInterval(poll) }
-  }, [])
+  }, [fetchParties])
 
-  // Refresh when parent signals (e.g. after adding a party)
   useEffect(() => {
     if (refreshKey !== undefined) fetchParties()
-  }, [refreshKey])
-
-  async function fetchParties() {
-    const res = await fetch('/api/parties')
-    const data = await res.json()
-    setParties(data)
-  }
+  }, [refreshKey, fetchParties])
 
   function showFlash(id: string, type: 'success' | 'error', msg: string) {
     setFlash({ id, type, msg })
