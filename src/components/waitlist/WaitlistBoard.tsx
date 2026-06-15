@@ -87,7 +87,7 @@ export default function WaitlistBoard() {
           return (
             <div
               key={party.id}
-              className={`grid grid-cols-[1fr_6rem] gap-4 items-center py-5 px-4 rounded-2xl
+              className={`grid grid-cols-[1fr_6rem] gap-4 items-center py-5 px-4 rounded-2xl animate-pop-in
                 ${i === 0 ? 'bg-rc-green/20 border-2 border-rc-green' : 'bg-white/5'}`}
             >
               <span className="text-white text-4xl font-bold truncate">

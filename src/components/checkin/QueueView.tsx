@@ -99,7 +99,7 @@ export default function QueueView({ refreshKey }: QueueViewProps) {
         return (
           <div
             key={party.id}
-            className={`bg-white rounded-2xl border transition-all duration-200
+            className={`bg-white rounded-2xl border transition-all duration-200 animate-pop-in
               ${i === 0 ? 'border-rc-green shadow-md shadow-rc-green/10' : 'border-slate-200 shadow-sm'}`}
           >
             <div className="flex items-center gap-4 px-5 py-4">
