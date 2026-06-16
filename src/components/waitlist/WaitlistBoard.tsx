@@ -107,7 +107,7 @@ export default function WaitlistBoard() {
         </div>
       </div>
 
-      <p className="text-rc-green/60 text-xl font-bold tracking-widest uppercase text-center shrink-0">
+      <p className="text-rc-green/60 text-[2.5rem] font-bold tracking-widest uppercase text-center shrink-0">
         putt · party · eat · repeat
       </p>
     </div>
