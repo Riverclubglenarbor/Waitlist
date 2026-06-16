@@ -24,10 +24,15 @@ const config: Config = {
           '0%': { opacity: '0', transform: 'scale(0.95) translateY(6px)' },
           '100%': { opacity: '1', transform: 'scale(1) translateY(0)' },
         },
+        'message-in': {
+          '0%': { opacity: '0', transform: 'scale(0.94) translateY(8px)' },
+          '100%': { opacity: '1', transform: 'scale(1) translateY(0)' },
+        },
       },
       animation: {
         'fade-in': 'fade-in 0.6s ease-out',
         'pop-in': 'pop-in 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both',
+        'message-in': 'message-in 0.6s ease-out',
       },
     },
   },
