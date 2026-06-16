@@ -16,7 +16,7 @@ export default function EmptyBoard() {
   useEffect(() => {
     const interval = setInterval(() => {
       setMsgIndex(i => (i + 1) % ROTATING_MESSAGES.length)
-    }, 4000)
+    }, 8000)
     return () => clearInterval(interval)
   }, [])
 
