@@ -7,7 +7,7 @@ const ROTATING_MESSAGES: { text: string; image?: string }[] = [
   { text: "Step right up! The course is all yours." },
   { text: "Walk right on — no waiting today!" },
   { text: "The course is calling your name." },
-  { text: "Before you go, you need this...", image: "/el-gringo-loco.png" },
+  { text: "Before you go, you needa. Gringo Loco...", image: "/el-gringo-loco.png" },
 ]
 
 export default function EmptyBoard() {
