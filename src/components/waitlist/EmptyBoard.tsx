@@ -29,7 +29,7 @@ export default function EmptyBoard() {
           </p>
         </div>
       </div>
-      <p className="text-rc-green text-6xl font-bold tracking-widest uppercase shrink-0">
+      <p className="text-rc-green text-6xl font-bold tracking-wide uppercase shrink-0 whitespace-nowrap mb-4">
         putt · party · eat · repeat
       </p>
     </div>
