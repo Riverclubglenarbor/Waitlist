@@ -59,8 +59,8 @@ export default function WaitlistBoard() {
       <Image
         src="/rc-logo.png"
         alt="River Club Glen Arbor"
-        width={340}
-        height={150}
+        width={680}
+        height={300}
         className="object-contain shrink-0"
       />
 
