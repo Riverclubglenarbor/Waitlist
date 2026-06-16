@@ -4,9 +4,7 @@ const SLOT_HEIGHT_REM = 7
 const SLOT_WIDTH_REM = 5.2
 const FONT_SIZE_REM = 7
 
-function DigitSlot({ digit }: { digit: number | null }) {
-  const rowIndex = digit === null ? 10 : digit
-
+function DigitSlot({ digit }: { digit: number }) {
   return (
     <div
       className="relative overflow-hidden shrink-0"
@@ -14,7 +12,7 @@ function DigitSlot({ digit }: { digit: number | null }) {
     >
       <div
         className="absolute top-0 left-0 w-full transition-transform duration-500 ease-out"
-        style={{ transform: `translateY(-${rowIndex * SLOT_HEIGHT_REM}rem)` }}
+        style={{ transform: `translateY(-${digit * SLOT_HEIGHT_REM}rem)` }}
       >
         {Array.from({ length: 10 }, (_, d) => (
           <div
@@ -25,7 +23,6 @@ function DigitSlot({ digit }: { digit: number | null }) {
             {d}
           </div>
         ))}
-        <div style={{ height: `${SLOT_HEIGHT_REM}rem` }} />
       </div>
     </div>
   )
@@ -33,14 +30,21 @@ function DigitSlot({ digit }: { digit: number | null }) {
 
 export default function OdometerNumber({ value, maxDigits = 3 }: { value: number; maxDigits?: number }) {
   const clamped = Math.max(0, Math.round(value))
-  const str = String(clamped).slice(-maxDigits).padStart(maxDigits, ' ')
-  const digits = str.split('').map(ch => (ch === ' ' ? null : parseInt(ch, 10)))
+  const digits = String(clamped).split('').map(ch => parseInt(ch, 10))
 
   return (
-    <div className="flex">
-      {digits.map((d, i) => (
-        <DigitSlot key={i} digit={d} />
-      ))}
+    <div
+      className="flex items-center justify-center shrink-0"
+      style={{ width: `${maxDigits * SLOT_WIDTH_REM}rem`, height: `${SLOT_HEIGHT_REM}rem` }}
+    >
+      <div className="flex">
+        {digits.map((d, i) => (
+          // Key by position from the right (ones, tens, hundreds...) so each
+          // place value keeps its identity — and its roll animation — as the
+          // digit count grows or shrinks, instead of remounting everything.
+          <DigitSlot key={digits.length - 1 - i} digit={d} />
+        ))}
+      </div>
     </div>
   )
 }
