@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getQueueWaitMinutes } from '@/lib/wait-time'
 import EmptyBoard from './EmptyBoard'
+import OdometerNumber from './OdometerNumber'
 import Image from 'next/image'
 import type { Party } from '@/types'
 
@@ -67,10 +68,10 @@ export default function WaitlistBoard() {
       <div className="flex-1 w-full flex flex-col items-center gap-8 overflow-hidden py-8 min-h-0">
         <div className="w-full bg-rc-green/10 border-2 border-rc-green rounded-3xl py-8 px-6 text-center shrink-0">
           <p className="text-white/60 text-2xl uppercase tracking-widest mb-2">Current Wait</p>
-          <p className="text-rc-green font-black leading-none" style={{ fontSize: '7rem' }}>
-            {totalWait}
-            <span className="text-4xl font-normal text-white/70 ml-3">min</span>
-          </p>
+          <div className="flex items-end justify-center gap-3">
+            <OdometerNumber value={totalWait} />
+            <span className="text-4xl font-normal text-white/70 pb-4">min</span>
+          </div>
         </div>
 
         <div className="w-full grid grid-cols-[1fr_6rem] gap-4 text-rc-green text-lg uppercase tracking-widest border-b-2 border-rc-green/40 pb-3 px-4 shrink-0">
