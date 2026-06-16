@@ -11,7 +11,7 @@ export function calculateWaitMinutes(
   smallRate: number,
   largeRate: number
 ): number {
-  return parties.reduce((total, p) => total + rateForParty(p.party_size, smallRate, largeRate) * p.party_size, 0)
+  return parties.reduce((total, p) => total + rateForParty(p.party_size, smallRate, largeRate), 0)
 }
 
 export function getQueueWaitMinutes(

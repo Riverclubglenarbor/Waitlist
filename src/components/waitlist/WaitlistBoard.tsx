@@ -81,7 +81,7 @@ export default function WaitlistBoard() {
         {parties.slice(0, 10).map((party, i) => {
           const waitAhead = parties
             .slice(0, i)
-            .reduce((sum, p) => sum + (p.party_size >= 5 ? largeRate : smallRate) * p.party_size, 0)
+            .reduce((sum, p) => sum + (p.party_size >= 5 ? largeRate : smallRate), 0)
           const wait = Math.round(waitAhead)
 
           return (

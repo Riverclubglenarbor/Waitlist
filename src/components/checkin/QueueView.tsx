@@ -125,7 +125,7 @@ export default function QueueView({ refreshKey }: QueueViewProps) {
   const teeTimes = parties.map(p => {
     const teeTimeMs = firstCheckinMs + cumulativeWaitMs
     const rate = p.party_size >= 5 ? largeRate : smallRate
-    cumulativeWaitMs += rate * p.party_size * 60_000
+    cumulativeWaitMs += rate * 60_000
     return teeTimeMs
   })
 

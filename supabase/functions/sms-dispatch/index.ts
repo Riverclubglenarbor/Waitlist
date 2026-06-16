@@ -32,7 +32,7 @@ function calculateWaitMinutes(
   smallRate: number,
   largeRate: number
 ): number {
-  return parties.reduce((total, p) => total + (p.party_size >= 5 ? largeRate : smallRate) * p.party_size, 0)
+  return parties.reduce((total, p) => total + (p.party_size >= 5 ? largeRate : smallRate), 0)
 }
 
 function getEstimatedTeeTime(
