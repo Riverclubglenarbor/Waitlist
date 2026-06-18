@@ -7,7 +7,7 @@ export default function EmptyBoard() {
     <div className="h-screen bg-rc-navy flex flex-col items-center px-16 py-10" style={{ fontFamily: 'var(--font-montserrat), sans-serif' }}>
       <Image src="/rc-logo.png" alt="River Club Glen Arbor" width={720} height={320} className="object-contain shrink-0" />
       <div className="flex-1 w-full flex flex-col items-center justify-center min-h-0">
-        <div className="w-full max-w-3xl bg-rc-green/10 border-2 border-rc-green rounded-3xl py-14 px-10 text-center">
+        <div className="w-full max-w-3xl bg-rc-green/10 border-2 border-rc-green rounded-3xl py-14 px-10 text-center -translate-y-[10vh]">
           <p className="text-white/60 text-3xl uppercase tracking-widest mb-4">Current Wait</p>
           <div className="flex items-end justify-center gap-4">
             <OdometerNumber value={0} />
