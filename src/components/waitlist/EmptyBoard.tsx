@@ -48,7 +48,7 @@ export default function EmptyBoard() {
           )}
         </div>
       </div>
-      <p className="text-rc-green text-6xl font-bold tracking-wide uppercase shrink-0 whitespace-nowrap mb-4">
+      <p className="text-rc-green text-6xl font-bold tracking-wide uppercase shrink-0 whitespace-nowrap mb-4" style={{ fontFamily: 'var(--font-montserrat), sans-serif' }}>
         putt · party · eat · repeat
       </p>
     </div>
