@@ -4,6 +4,7 @@ import type { Settings } from '@/types'
 import { EMPTY_BOARD_SLIDES } from '@/lib/empty-board-messages'
 
 const FIELD_LABELS: Record<string, string> = {
+  sms_enabled: 'Collect Phone Number & Send SMS',
   avg_min_per_hole_small: 'Min Per Hole — Small Group (1–4 players)',
   avg_min_per_hole_large: 'Min Per Hole — Large Group (5–6 players)',
   notification_lead_minutes: 'SMS Lead Time (min before tee)',
@@ -22,9 +23,12 @@ const FIELD_LABELS: Record<string, string> = {
   ),
 }
 
-const FIELD_DEFAULTS: Record<string, string> = Object.fromEntries(
-  EMPTY_BOARD_SLIDES.map(s => [s.key, s.defaultText])
-)
+const FIELD_DEFAULTS: Record<string, string> = {
+  sms_enabled: 'false',
+  ...Object.fromEntries(
+    EMPTY_BOARD_SLIDES.map(s => [s.key, s.defaultText])
+  ),
+}
 
 export default function SettingsForm() {
   const [settings, setSettings] = useState<Settings>({})
@@ -55,7 +59,14 @@ export default function SettingsForm() {
           <label className="text-rc-green text-sm font-bold uppercase tracking-wider">
             {label}
           </label>
-          {key.includes('template') || key.includes('empty_board_message') ? (
+          {key === 'sms_enabled' ? (
+            <input
+              type="checkbox"
+              checked={(settings[key] ?? FIELD_DEFAULTS[key]) === 'true'}
+              onChange={e => setSettings(s => ({ ...s, [key]: e.target.checked ? 'true' : 'false' }))}
+              className="w-6 h-6 accent-rc-green self-start"
+            />
+          ) : key.includes('template') || key.includes('empty_board_message') ? (
             <textarea
               value={settings[key] ?? FIELD_DEFAULTS[key] ?? ''}
               onChange={e => setSettings(s => ({ ...s, [key]: e.target.value }))}
