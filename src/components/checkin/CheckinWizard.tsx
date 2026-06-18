@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import NameStep from './NameStep'
 import InitialStep from './InitialStep'
 import PartySizeStep from './PartySizeStep'
@@ -22,13 +22,21 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
   const [loading, setLoading] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const [smsEnabled, setSmsEnabled] = useState(false)
   const [state, setState] = useState<WizardState>({
     firstName: '',
     lastInitial: '',
     partySize: 1,
   })
 
-  async function handlePhoneSubmit(phone: string) {
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then(settings => setSmsEnabled(settings.sms_enabled === 'true'))
+      .catch(() => {})
+  }, [])
+
+  async function submitParty(phone?: string) {
     setLoading(true)
     setErrorMsg('')
     try {
@@ -39,7 +47,7 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
           first_name: state.firstName,
           last_initial: state.lastInitial,
           party_size: state.partySize,
-          phone,
+          ...(phone ? { phone } : {}),
         }),
       })
       if (!res.ok) {
@@ -111,14 +119,18 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
         <PartySizeStep
           onNext={partySize => {
             setState(s => ({ ...s, partySize }))
-            setStep('phone')
+            if (smsEnabled) {
+              setStep('phone')
+            } else {
+              submitParty()
+            }
           }}
           onBack={() => setStep('initial')}
         />
       )}
       {step === 'phone' && (
         <PhoneStep
-          onSubmit={handlePhoneSubmit}
+          onSubmit={phone => submitParty(phone)}
           onBack={() => setStep('size')}
           loading={loading}
         />
