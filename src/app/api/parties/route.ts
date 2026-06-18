@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   const body = await request.json()
   const { first_name, last_initial, party_size, phone, notes } = body
 
-  if (!first_name || !last_initial || !party_size || !phone) {
+  if (!first_name || !last_initial || !party_size) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
@@ -81,20 +81,22 @@ export async function POST(request: Request) {
     inserted.push(party)
   }
 
-  // Send one welcome SMS (mention split if multiple groups)
-  try {
-    let welcomeMsg: string
-    if (groups.length > 1) {
-      welcomeMsg = `Welcome to River Club! 🏌️ Your party of ${totalSize} has been split into ${groups.length} groups (max 6 per tee time). Est. wait: ~${waitMinutes} min. We'll text you when it's time!`
-    } else {
-      welcomeMsg = interpolate(settings.welcome_sms_template, {
-        name: first_name,
-        wait: waitMinutes,
-      })
+  // Send one welcome SMS (mention split if multiple groups) — only if a phone was provided
+  if (phone) {
+    try {
+      let welcomeMsg: string
+      if (groups.length > 1) {
+        welcomeMsg = `Welcome to River Club! 🏌️ Your party of ${totalSize} has been split into ${groups.length} groups (max 6 per tee time). Est. wait: ~${waitMinutes} min. We'll text you when it's time!`
+      } else {
+        welcomeMsg = interpolate(settings.welcome_sms_template, {
+          name: first_name,
+          wait: waitMinutes,
+        })
+      }
+      await sendSms(phone, welcomeMsg)
+    } catch (smsError) {
+      console.error('Welcome SMS failed:', smsError)
     }
-    await sendSms(phone, welcomeMsg)
-  } catch (smsError) {
-    console.error('Welcome SMS failed:', smsError)
   }
 
   return NextResponse.json(inserted, { status: 201 })
