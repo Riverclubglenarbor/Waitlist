@@ -56,7 +56,7 @@ export default function WaitlistBoard() {
   const totalWait = Math.round(getQueueWaitMinutes(parties, smallRate, largeRate))
 
   return (
-    <div className="h-screen bg-rc-navy flex flex-col items-center px-8 py-10">
+    <div className="h-screen bg-rc-navy flex flex-col items-center px-8 py-10" style={{ fontFamily: 'var(--font-montserrat), sans-serif' }}>
       <Image
         src="/rc-logo.png"
         alt="River Club Glen Arbor"
