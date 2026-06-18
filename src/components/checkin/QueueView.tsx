@@ -84,7 +84,8 @@ export default function QueueView({ refreshKey }: QueueViewProps) {
     else showFlash(id, 'error', 'Failed to send')
   }
 
-  async function autoResend(id: string) {
+  async function autoResend(id: string, phone: string | null) {
+    if (!phone) return
     if (autoResentRef.current.has(id)) return
     autoResentRef.current.add(id)
     await fetch(`/api/parties/${id}/resend`, { method: 'POST' })
@@ -140,7 +141,7 @@ export default function QueueView({ refreshKey }: QueueViewProps) {
         const isCritical = remainingSec <= -120 // -2 minutes
 
         // Trigger auto-resend at -2 min
-        if (isCritical) autoResend(party.id)
+        if (isCritical) autoResend(party.id, party.phone)
 
         return (
           <div
@@ -206,7 +207,7 @@ export default function QueueView({ refreshKey }: QueueViewProps) {
 
                 <button
                   onClick={() => resend(party.id)}
-                  disabled={!!loading}
+                  disabled={!!loading || !party.phone}
                   className="border border-rc-navy text-rc-navy text-sm font-semibold
                              px-3 py-2 rounded-xl transition-all duration-150
                              hover:bg-rc-navy hover:text-white active:scale-[0.97] disabled:opacity-40"
