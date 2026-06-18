@@ -11,7 +11,7 @@ type PartyStatus = 'waiting' | 'notified' | 'no_show' | 'playing' | 'removed'
 interface Party {
   id: string
   first_name: string
-  phone: string
+  phone: string | null
   party_size: number
   checked_in_at: string
   notified_at?: string
@@ -113,39 +113,43 @@ Deno.serve(async () => {
     const minutesUntilTee = (estimatedTeeTime.getTime() - now.getTime()) / 60_000
 
     if (party.status === 'waiting' && minutesUntilTee <= leadMinutes) {
-      try {
-        const msg = interpolate(settings.notification_sms_template, {
-          name: party.first_name,
-          wait: Math.max(0, Math.round(minutesUntilTee)),
-        })
-        await sendSms(party.phone, msg)
-        await supabase
-          .from('parties')
-          .update({ status: 'notified', notified_at: now.toISOString() })
-          .eq('id', party.id)
-        results.push(`notified:${party.id}`)
-      } catch (err) {
-        console.error(`Pre-notify SMS failed for ${party.id}:`, err)
+      if (party.phone) {
+        try {
+          const msg = interpolate(settings.notification_sms_template, {
+            name: party.first_name,
+            wait: Math.max(0, Math.round(minutesUntilTee)),
+          })
+          await sendSms(party.phone, msg)
+        } catch (err) {
+          console.error(`Pre-notify SMS failed for ${party.id}:`, err)
+        }
       }
+      await supabase
+        .from('parties')
+        .update({ status: 'notified', notified_at: now.toISOString() })
+        .eq('id', party.id)
+      results.push(`notified:${party.id}`)
     }
 
     if (party.status === 'notified' && party.notified_at) {
       const minutesSinceNotify =
         (now.getTime() - new Date(party.notified_at).getTime()) / 60_000
       if (minutesSinceNotify >= noShowMinutes && !party.followup_sent_at) {
-        try {
-          const msg = interpolate(settings.followup_sms_template, {
-            name: party.first_name,
-          })
-          await sendSms(party.phone, msg)
-          await supabase
-            .from('parties')
-            .update({ status: 'no_show', followup_sent_at: now.toISOString() })
-            .eq('id', party.id)
-          results.push(`no_show:${party.id}`)
-        } catch (err) {
-          console.error(`Follow-up SMS failed for ${party.id}:`, err)
+        if (party.phone) {
+          try {
+            const msg = interpolate(settings.followup_sms_template, {
+              name: party.first_name,
+            })
+            await sendSms(party.phone, msg)
+          } catch (err) {
+            console.error(`Follow-up SMS failed for ${party.id}:`, err)
+          }
         }
+        await supabase
+          .from('parties')
+          .update({ status: 'no_show', followup_sent_at: now.toISOString() })
+          .eq('id', party.id)
+        results.push(`no_show:${party.id}`)
       }
     }
   }
