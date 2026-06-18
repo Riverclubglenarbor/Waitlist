@@ -21,6 +21,10 @@ export async function POST(
     return NextResponse.json({ error: 'Party not found' }, { status: 404 })
   }
 
+  if (!party.phone) {
+    return NextResponse.json({ error: 'Party has no phone on file' }, { status: 400 })
+  }
+
   const { data: settings } = await supabase
     .from('settings')
     .select('key, value')
