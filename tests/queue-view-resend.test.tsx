@@ -45,7 +45,7 @@ describe('QueueView resend button', () => {
   it('enables Resend for a party with a phone on file', async () => {
     render(<QueueView />)
     await waitFor(() => screen.getByText('Sarah D.'))
-    const row = screen.getByText('Sarah D.').closest('div.bg-white')!
+    const row = screen.getByText('Sarah D.').closest('div.bg-white') as HTMLElement
     const resendButton = within(row).getByRole('button', { name: /resend/i })
     expect(resendButton).toBeEnabled()
   })
@@ -53,7 +53,7 @@ describe('QueueView resend button', () => {
   it('disables Resend for a party with no phone on file', async () => {
     render(<QueueView />)
     await waitFor(() => screen.getByText('Mike T.'))
-    const row = screen.getByText('Mike T.').closest('div.bg-white')!
+    const row = screen.getByText('Mike T.').closest('div.bg-white') as HTMLElement
     const resendButton = within(row).getByRole('button', { name: /resend/i })
     expect(resendButton).toBeDisabled()
   })
