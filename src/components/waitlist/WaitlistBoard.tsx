@@ -5,6 +5,7 @@ import { getQueueWaitMinutes } from '@/lib/wait-time'
 import EmptyBoard from './EmptyBoard'
 import OdometerNumber from './OdometerNumber'
 import Image from 'next/image'
+import { QRCodeSVG } from 'qrcode.react'
 import type { Party } from '@/types'
 
 function formatName(firstName: string, lastInitial: string): string {
@@ -108,9 +109,16 @@ export default function WaitlistBoard() {
         </div>
       </div>
 
-      <p className="text-rc-green/60 text-[2.5rem] font-bold tracking-widest uppercase text-center shrink-0">
-        putt · party · eat · repeat
-      </p>
+      <div className="w-full flex items-end justify-between shrink-0">
+        <div className="w-[120px]" />
+        <p className="text-rc-green/60 text-[2.5rem] font-bold tracking-widest uppercase text-center flex-1">
+          putt · party · eat · repeat
+        </p>
+        <div className="w-[120px] flex flex-col items-center gap-1">
+          <QRCodeSVG value="https://river-club-waitlist.vercel.app/track" size={96} bgColor="#1E3A5F" fgColor="#ffffff" />
+          <span className="text-white/60 text-[0.65rem] uppercase tracking-wide text-center">Scan to track your spot</span>
+        </div>
+      </div>
     </div>
   )
 }
