@@ -1,9 +1,11 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 import NameStep from './NameStep'
 import InitialStep from './InitialStep'
 import PartySizeStep from './PartySizeStep'
 import PhoneStep from './PhoneStep'
+import type { Party } from '@/types'
 
 type Step = 'name' | 'initial' | 'size' | 'phone'
 
@@ -20,7 +22,7 @@ interface CheckinWizardProps {
 export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
   const [step, setStep] = useState<Step>('name')
   const [loading, setLoading] = useState(false)
-  const [confirmed, setConfirmed] = useState(false)
+  const [confirmedParties, setConfirmedParties] = useState<Party[] | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
   const [smsEnabled, setSmsEnabled] = useState(false)
   const [state, setState] = useState<WizardState>({
@@ -55,13 +57,9 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
         setErrorMsg(data.error ?? 'Failed to add party')
         return
       }
-      setConfirmed(true)
+      const inserted: Party[] = await res.json()
+      setConfirmedParties(inserted)
       onSuccess()
-      setTimeout(() => {
-        setConfirmed(false)
-        setStep('name')
-        setState({ firstName: '', lastInitial: '', partySize: 1 })
-      }, 1500)
     } catch {
       setErrorMsg('Network error — check connection')
     } finally {
@@ -69,13 +67,38 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
     }
   }
 
-  if (confirmed) {
+  function handleDone() {
+    setConfirmedParties(null)
+    setStep('name')
+    setState({ firstName: '', lastInitial: '', partySize: 1 })
+  }
+
+  if (confirmedParties) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <div className="text-rc-green text-6xl mb-4">✓</div>
-          <div className="text-rc-navy text-2xl font-bold">Par-Tee Added!</div>
+      <div className="flex flex-col items-center justify-center h-full gap-6 p-6">
+        <div className="text-rc-green text-6xl">✓</div>
+        <div className="text-rc-navy text-2xl font-bold">Par-Tee Added!</div>
+        <div className="flex flex-wrap items-start justify-center gap-6">
+          {confirmedParties.map((party, i) => (
+            <div key={party.id} className="flex flex-col items-center gap-2">
+              {confirmedParties.length > 1 && (
+                <span className="text-rc-navy text-sm font-semibold">
+                  Group {i + 1} of {confirmedParties.length}
+                </span>
+              )}
+              <QRCodeSVG value={`https://river-club-waitlist.vercel.app/track/${party.id}`} size={140} />
+            </div>
+          ))}
         </div>
+        <p className="text-slate-400 text-sm text-center max-w-xs">
+          Have the customer scan to track their spot
+        </p>
+        <button
+          onClick={handleDone}
+          className="bg-rc-green text-white px-8 py-3 rounded-xl font-bold"
+        >
+          Done
+        </button>
       </div>
     )
   }

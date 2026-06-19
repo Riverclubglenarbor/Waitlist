@@ -4,9 +4,18 @@ import CheckinWizard from '@/components/checkin/CheckinWizard'
 const noop = () => {}
 
 function mockFetch(settingsOverride: Record<string, string> = { sms_enabled: 'true' }) {
-  global.fetch = vi.fn((url: string) => {
-    if (url.toString().includes('/api/settings')) {
+  global.fetch = vi.fn((url: string, init?: RequestInit) => {
+    const u = url.toString()
+    if (u.includes('/api/settings')) {
       return Promise.resolve({ json: async () => settingsOverride, ok: true })
+    }
+    if (u.includes('/api/parties') && init?.method === 'POST') {
+      return Promise.resolve({
+        ok: true,
+        json: async () => [
+          { id: 'party-1', first_name: 'Alex', last_initial: 'S', party_size: 2, checked_in_at: new Date().toISOString(), status: 'waiting' },
+        ],
+      })
     }
     return Promise.resolve({ json: async () => ({}), ok: true })
   }) as unknown as typeof fetch
@@ -94,9 +103,9 @@ describe('CheckinWizard', () => {
     })
   })
 
-  it('shows confirmation after successful submit', async () => {
+  it('shows a QR code after successful submit and only resets when Done is clicked', async () => {
     const onSuccess = vi.fn()
-    render(<CheckinWizard onSuccess={onSuccess} />)
+    const { container } = render(<CheckinWizard onSuccess={onSuccess} />)
     // Name step
     fireEvent.change(screen.getByPlaceholderText('e.g. Sarah'), {
       target: { value: 'Alex' },
@@ -127,6 +136,17 @@ describe('CheckinWizard', () => {
       expect(screen.getByText('Par-Tee Added!')).toBeInTheDocument()
     })
     expect(onSuccess).toHaveBeenCalledOnce()
+    expect(container.querySelectorAll('svg').length).toBe(1)
+
+    // Does not auto-reset (old behavior used a 1.5s timer)
+    await new Promise(resolve => setTimeout(resolve, 1600))
+    expect(screen.getByText('Par-Tee Added!')).toBeInTheDocument()
+
+    // Resets only after Done is clicked
+    fireEvent.click(screen.getByRole('button', { name: /done/i }))
+    await waitFor(() => {
+      expect(screen.getByText('First Name?')).toBeInTheDocument()
+    })
   })
 })
 
@@ -183,5 +203,46 @@ describe('CheckinWizard with SMS disabled', () => {
     const body = JSON.parse(postCall![1].body)
     expect(body.phone).toBeUndefined()
     expect(body.first_name).toBe('Alex')
+  })
+})
+
+describe('CheckinWizard multi-group confirmation', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    global.fetch = vi.fn((url: string, init?: RequestInit) => {
+      const u = url.toString()
+      if (u.includes('/api/settings')) {
+        return Promise.resolve({ json: async () => ({ sms_enabled: 'false' }), ok: true })
+      }
+      if (u.includes('/api/parties') && init?.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { id: 'group-1', first_name: 'Big Group 1', last_initial: 'S', party_size: 6, checked_in_at: new Date().toISOString(), status: 'waiting' },
+            { id: 'group-2', first_name: 'Big Group 2', last_initial: 'S', party_size: 2, checked_in_at: new Date().toISOString(), status: 'waiting' },
+          ],
+        })
+      }
+      return Promise.resolve({ json: async () => ({}), ok: true })
+    }) as unknown as typeof fetch
+  })
+
+  it('shows one QR code per split group', async () => {
+    const { container } = render(<CheckinWizard onSuccess={() => {}} />)
+    fireEvent.change(screen.getByPlaceholderText('e.g. Sarah'), {
+      target: { value: 'Big Group' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await waitFor(() => screen.getByText(/Last Initial/))
+    fireEvent.change(screen.getByPlaceholderText('e.g. D'), {
+      target: { value: 'S' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await waitFor(() => screen.getByText('Party Size?'))
+    fireEvent.click(screen.getByRole('button', { name: '8' }))
+    await waitFor(() => screen.getByText('Par-Tee Added!'))
+    expect(container.querySelectorAll('svg').length).toBe(2)
+    expect(screen.getByText('Group 1 of 2')).toBeInTheDocument()
+    expect(screen.getByText('Group 2 of 2')).toBeInTheDocument()
   })
 })
