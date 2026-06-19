@@ -39,6 +39,16 @@ export function getWaitMinutesForParty(
   return calculateWaitMinutes(ahead, smallRate, largeRate)
 }
 
+export function getPartyPosition(party: Party, allParties: Party[]): number {
+  const active = allParties
+    .filter(p => p.status === 'waiting' || p.status === 'notified')
+    .sort((a, b) => {
+      const byTime = a.checked_in_at.localeCompare(b.checked_in_at)
+      return byTime !== 0 ? byTime : a.id.localeCompare(b.id)
+    })
+  return active.findIndex(p => p.id === party.id) + 1
+}
+
 export function getEstimatedTeeTime(
   party: Party,
   allParties: Party[],
