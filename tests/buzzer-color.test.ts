@@ -17,4 +17,8 @@ describe('buzzerColor', () => {
   it('blends proportionally at a midpoint position', () => {
     expect(buzzerColor(4)).toBe('#4b8754')
   })
+
+  it('clamps to full green for position 0 (getPartyPosition\'s not-found sentinel)', () => {
+    expect(buzzerColor(0)).toBe('#6dc04b')
+  })
 })
