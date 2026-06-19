@@ -131,6 +131,15 @@ describe('PersonalTrackBoard', () => {
     await waitFor(() => screen.getByText(/expired/i))
   })
 
+  it('shows the expired message when staff removes the party', async () => {
+    mockFetch(
+      { ok: true },
+      { partyById: { first: { ok: true, body: { ...parties[0], status: 'removed' } } } }
+    )
+    render(<PersonalTrackBoard id="first" />)
+    await waitFor(() => screen.getByText(/expired/i))
+  })
+
   it('shows a network error and resets the confirm state when the ready call rejects', async () => {
     render(<PersonalTrackBoard id="first" />)
     await waitFor(() => screen.getByRole('button', { name: /ready for the course/i }))
