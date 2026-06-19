@@ -39,6 +39,8 @@ export function getWaitMinutesForParty(
   return calculateWaitMinutes(ahead, smallRate, largeRate)
 }
 
+// Returns the party's 1-based position in the active queue, or 0 if the
+// party isn't present in allParties (e.g. already removed or playing).
 export function getPartyPosition(party: Party, allParties: Party[]): number {
   const active = allParties
     .filter(p => p.status === 'waiting' || p.status === 'notified')
