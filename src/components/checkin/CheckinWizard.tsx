@@ -58,6 +58,10 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
         return
       }
       const inserted: Party[] = await res.json()
+      if (!Array.isArray(inserted)) {
+        setErrorMsg('Unexpected response — please try again')
+        return
+      }
       setConfirmedParties(inserted)
       onSuccess()
     } catch {
@@ -73,7 +77,7 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
     setState({ firstName: '', lastInitial: '', partySize: 1 })
   }
 
-  if (confirmedParties) {
+  if (confirmedParties !== null) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-6 p-6">
         <div className="text-rc-green text-6xl">✓</div>
