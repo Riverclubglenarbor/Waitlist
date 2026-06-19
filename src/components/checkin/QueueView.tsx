@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import type { Party } from '@/types'
 
-type ActionState = { id: string; type: 'checkin' | 'resend' | 'noshow' | 'remove' } | null
+type ActionState = { id: string; type: 'checkin' | 'resend' | 'paid' | 'remove' } | null
 
 interface QueueViewProps {
   refreshKey?: number
@@ -92,12 +92,12 @@ export default function QueueView({ refreshKey }: QueueViewProps) {
     showFlash(id, 'success', 'Auto-text sent!')
   }
 
-  async function noShow(id: string) {
-    setLoading({ id, type: 'noshow' })
+  async function togglePaid(id: string, paid: boolean) {
+    setLoading({ id, type: 'paid' })
     await fetch(`/api/parties/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'no_show' }),
+      body: JSON.stringify({ paid: !paid }),
     })
     setLoading(null)
     fetchParties()
@@ -216,13 +216,15 @@ export default function QueueView({ refreshKey }: QueueViewProps) {
                 </button>
 
                 <button
-                  onClick={() => noShow(party.id)}
+                  onClick={() => togglePaid(party.id, party.paid)}
                   disabled={!!loading}
-                  className="border border-amber-400 text-amber-600 text-sm font-semibold
-                             px-3 py-2 rounded-xl transition-all duration-150
-                             hover:bg-amber-50 active:scale-[0.97] disabled:opacity-40"
+                  className={`border text-sm font-semibold px-3 py-2 rounded-xl transition-all duration-150
+                             active:scale-[0.97] disabled:opacity-40
+                             ${party.paid
+                               ? 'border-rc-green text-rc-green hover:bg-rc-green/10'
+                               : 'border-amber-400 text-amber-600 hover:bg-amber-50'}`}
                 >
-                  {isLoading && loading?.type === 'noshow' ? '…' : 'No Show'}
+                  {isLoading && loading?.type === 'paid' ? '…' : party.paid ? '✓ Paid' : 'Not Paid'}
                 </button>
 
                 <button

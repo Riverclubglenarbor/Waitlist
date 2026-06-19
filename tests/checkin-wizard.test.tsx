@@ -103,7 +103,30 @@ describe('CheckinWizard', () => {
     })
   })
 
-  it('shows a QR code after successful submit and only resets when Done is clicked', async () => {
+  it('advances to the paid step after the phone step', async () => {
+    render(<CheckinWizard onSuccess={noop} />)
+    fireEvent.change(screen.getByPlaceholderText('e.g. Sarah'), {
+      target: { value: 'Alex' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await waitFor(() => screen.getByText(/Last Initial/))
+    fireEvent.change(screen.getByPlaceholderText('e.g. D'), {
+      target: { value: 'S' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await waitFor(() => screen.getByText('Party Size?'))
+    fireEvent.click(screen.getByRole('button', { name: '2' }))
+    await waitFor(() => screen.getByText('Phone Number for Texts?'))
+    fireEvent.change(screen.getByPlaceholderText('(231) 555-0100'), {
+      target: { value: '2315550100' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await waitFor(() => {
+      expect(screen.getByText('Have They Paid?')).toBeInTheDocument()
+    })
+  })
+
+  it('shows a QR code after answering paid and only resets when Done is clicked', async () => {
     const onSuccess = vi.fn()
     const { container } = render(<CheckinWizard onSuccess={onSuccess} />)
     // Name step
@@ -131,7 +154,12 @@ describe('CheckinWizard', () => {
     fireEvent.change(screen.getByPlaceholderText('(231) 555-0100'), {
       target: { value: '2315550100' },
     })
-    fireEvent.click(screen.getByRole('button', { name: /add to queue/i }))
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    // Paid step
+    await waitFor(() => {
+      expect(screen.getByText('Have They Paid?')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: /yes/i }))
     await waitFor(() => {
       expect(screen.getByText('Par-Tee Added!')).toBeInTheDocument()
     })
@@ -156,9 +184,8 @@ describe('CheckinWizard with SMS disabled', () => {
     mockFetch({ sms_enabled: 'false' })
   })
 
-  it('skips the phone step and submits directly after selecting a party size', async () => {
-    const onSuccess = vi.fn()
-    render(<CheckinWizard onSuccess={onSuccess} />)
+  it('skips the phone step and goes straight to the paid step after selecting a party size', async () => {
+    render(<CheckinWizard onSuccess={noop} />)
     fireEvent.change(screen.getByPlaceholderText('e.g. Sarah'), {
       target: { value: 'Alex' },
     })
@@ -175,13 +202,34 @@ describe('CheckinWizard with SMS disabled', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: '2' }))
     await waitFor(() => {
-      expect(screen.getByText('Par-Tee Added!')).toBeInTheDocument()
+      expect(screen.getByText('Have They Paid?')).toBeInTheDocument()
     })
     expect(screen.queryByText('Phone Number for Texts?')).not.toBeInTheDocument()
+  })
+
+  it('submits and shows confirmation after answering the paid step', async () => {
+    const onSuccess = vi.fn()
+    render(<CheckinWizard onSuccess={onSuccess} />)
+    fireEvent.change(screen.getByPlaceholderText('e.g. Sarah'), {
+      target: { value: 'Alex' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await waitFor(() => screen.getByText(/Last Initial/))
+    fireEvent.change(screen.getByPlaceholderText('e.g. D'), {
+      target: { value: 'S' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await waitFor(() => screen.getByText('Party Size?'))
+    fireEvent.click(screen.getByRole('button', { name: '2' }))
+    await waitFor(() => screen.getByText('Have They Paid?'))
+    fireEvent.click(screen.getByRole('button', { name: /yes/i }))
+    await waitFor(() => {
+      expect(screen.getByText('Par-Tee Added!')).toBeInTheDocument()
+    })
     expect(onSuccess).toHaveBeenCalledOnce()
   })
 
-  it('posts without a phone field when SMS is disabled', async () => {
+  it('posts without a phone field but with the chosen paid value', async () => {
     render(<CheckinWizard onSuccess={() => {}} />)
     fireEvent.change(screen.getByPlaceholderText('e.g. Sarah'), {
       target: { value: 'Alex' },
@@ -194,6 +242,8 @@ describe('CheckinWizard with SMS disabled', () => {
     fireEvent.click(screen.getByRole('button', { name: /next/i }))
     await waitFor(() => screen.getByText('Party Size?'))
     fireEvent.click(screen.getByRole('button', { name: '2' }))
+    await waitFor(() => screen.getByText('Have They Paid?'))
+    fireEvent.click(screen.getByRole('button', { name: /no/i }))
     await waitFor(() => screen.getByText('Par-Tee Added!'))
 
     const postCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
@@ -202,7 +252,32 @@ describe('CheckinWizard with SMS disabled', () => {
     expect(postCall).toBeDefined()
     const body = JSON.parse(postCall![1].body)
     expect(body.phone).toBeUndefined()
+    expect(body.paid).toBe(false)
     expect(body.first_name).toBe('Alex')
+  })
+
+  it('posts paid: true when staff answers yes', async () => {
+    render(<CheckinWizard onSuccess={() => {}} />)
+    fireEvent.change(screen.getByPlaceholderText('e.g. Sarah'), {
+      target: { value: 'Alex' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await waitFor(() => screen.getByText(/Last Initial/))
+    fireEvent.change(screen.getByPlaceholderText('e.g. D'), {
+      target: { value: 'S' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await waitFor(() => screen.getByText('Party Size?'))
+    fireEvent.click(screen.getByRole('button', { name: '2' }))
+    await waitFor(() => screen.getByText('Have They Paid?'))
+    fireEvent.click(screen.getByRole('button', { name: /yes/i }))
+    await waitFor(() => screen.getByText('Par-Tee Added!'))
+
+    const postCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+      call => call[0].toString().includes('/api/parties') && call[1]?.method === 'POST'
+    )
+    const body = JSON.parse(postCall![1].body)
+    expect(body.paid).toBe(true)
   })
 })
 
@@ -240,6 +315,8 @@ describe('CheckinWizard multi-group confirmation', () => {
     fireEvent.click(screen.getByRole('button', { name: /next/i }))
     await waitFor(() => screen.getByText('Party Size?'))
     fireEvent.click(screen.getByRole('button', { name: '8' }))
+    await waitFor(() => screen.getByText('Have They Paid?'))
+    fireEvent.click(screen.getByRole('button', { name: /yes/i }))
     await waitFor(() => screen.getByText('Par-Tee Added!'))
     expect(container.querySelectorAll('svg').length).toBe(2)
     expect(screen.getByText('Group 1 of 2')).toBeInTheDocument()

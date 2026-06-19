@@ -4,10 +4,9 @@ import { useState, useRef, useEffect } from 'react'
 interface PhoneStepProps {
   onSubmit: (phone: string) => void
   onBack: () => void
-  loading: boolean
 }
 
-export default function PhoneStep({ onSubmit, onBack, loading }: PhoneStepProps) {
+export default function PhoneStep({ onSubmit, onBack }: PhoneStepProps) {
   const [value, setValue] = useState('')
   const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
@@ -58,10 +57,11 @@ export default function PhoneStep({ onSubmit, onBack, loading }: PhoneStepProps)
         {error && <p className="text-red-400 text-sm">{error}</p>}
         <button
           type="submit"
-          disabled={!isValid(value) || loading}
-          className="bg-rc-green disabled:opacity-40 text-white px-12 py-4 rounded-xl text-2xl font-bold w-full"
+          disabled={!isValid(value)}
+          className="bg-rc-green disabled:opacity-40 text-white px-12 py-4 rounded-xl text-2xl font-bold w-full
+                     transition-all active:scale-[0.97]"
         >
-          {loading ? 'Adding…' : 'Add to Queue ⛳'}
+          Next →
         </button>
       </form>
       <button onClick={onBack} className="text-slate-400 text-lg underline">

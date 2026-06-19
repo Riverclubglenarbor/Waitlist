@@ -6,6 +6,7 @@ export interface Party {
   last_initial: string
   party_size: number
   phone: string | null
+  paid: boolean
   notes?: string
   checked_in_at: string
   notified_at?: string

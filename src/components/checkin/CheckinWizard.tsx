@@ -5,18 +5,26 @@ import NameStep from './NameStep'
 import InitialStep from './InitialStep'
 import PartySizeStep from './PartySizeStep'
 import PhoneStep from './PhoneStep'
+import PaidStep from './PaidStep'
 import type { Party } from '@/types'
 
-type Step = 'name' | 'initial' | 'size' | 'phone'
+type Step = 'name' | 'initial' | 'size' | 'phone' | 'paid'
 
 interface WizardState {
   firstName: string
   lastInitial: string
   partySize: number
+  phone?: string
 }
 
 interface CheckinWizardProps {
   onSuccess: () => void
+}
+
+const initialWizardState: WizardState = {
+  firstName: '',
+  lastInitial: '',
+  partySize: 1,
 }
 
 export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
@@ -25,11 +33,7 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
   const [confirmedParties, setConfirmedParties] = useState<Party[] | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
   const [smsEnabled, setSmsEnabled] = useState(false)
-  const [state, setState] = useState<WizardState>({
-    firstName: '',
-    lastInitial: '',
-    partySize: 1,
-  })
+  const [state, setState] = useState<WizardState>(initialWizardState)
 
   useEffect(() => {
     fetch('/api/settings')
@@ -38,7 +42,7 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
       .catch(() => {})
   }, [])
 
-  async function submitParty(phone?: string) {
+  async function submitParty(paid: boolean) {
     setLoading(true)
     setErrorMsg('')
     try {
@@ -49,7 +53,8 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
           first_name: state.firstName,
           last_initial: state.lastInitial,
           party_size: state.partySize,
-          ...(phone ? { phone } : {}),
+          paid,
+          ...(state.phone ? { phone: state.phone } : {}),
         }),
       })
       if (!res.ok) {
@@ -74,7 +79,7 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
   function handleDone() {
     setConfirmedParties(null)
     setStep('name')
-    setState({ firstName: '', lastInitial: '', partySize: 1 })
+    setState(initialWizardState)
   }
 
   if (confirmedParties !== null) {
@@ -118,7 +123,7 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
         <div className="text-red-500 text-5xl">⚠️</div>
         <p className="text-rc-navy text-xl font-semibold text-center max-w-xs">{errorMsg}</p>
         <button
-          onClick={() => { setErrorMsg(''); setStep('name'); setState({ firstName: '', lastInitial: '', partySize: 1 }) }}
+          onClick={() => { setErrorMsg(''); setStep('name'); setState(initialWizardState) }}
           className="bg-rc-green text-white px-8 py-3 rounded-xl font-bold"
         >
           Try Again
@@ -151,19 +156,24 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
         <PartySizeStep
           onNext={partySize => {
             setState(s => ({ ...s, partySize }))
-            if (smsEnabled) {
-              setStep('phone')
-            } else {
-              submitParty()
-            }
+            setStep(smsEnabled ? 'phone' : 'paid')
           }}
           onBack={() => setStep('initial')}
         />
       )}
       {step === 'phone' && (
         <PhoneStep
-          onSubmit={phone => submitParty(phone)}
+          onSubmit={phone => {
+            setState(s => ({ ...s, phone }))
+            setStep('paid')
+          }}
           onBack={() => setStep('size')}
+        />
+      )}
+      {step === 'paid' && (
+        <PaidStep
+          onNext={paid => submitParty(paid)}
+          onBack={() => setStep(smsEnabled ? 'phone' : 'size')}
           loading={loading}
         />
       )}

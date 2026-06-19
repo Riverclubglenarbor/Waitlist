@@ -24,7 +24,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const supabase = createServerClient()
   const body = await request.json()
-  const { first_name, last_initial, party_size, phone, notes } = body
+  const { first_name, last_initial, party_size, phone, paid, notes } = body
 
   if (!first_name || !last_initial || !party_size) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -72,6 +72,7 @@ export async function POST(request: Request) {
         last_initial,
         party_size: group.size,
         phone,
+        paid: paid === true,
         notes,
       })
       .select()

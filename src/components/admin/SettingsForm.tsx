@@ -3,6 +3,18 @@ import { useEffect, useState } from 'react'
 import type { Settings } from '@/types'
 import { EMPTY_BOARD_SLIDES } from '@/lib/empty-board-messages'
 
+// Hidden from the admin UI for now — SMS is disabled and being phased out.
+// The underlying settings/code stay intact (sms-dispatch, Twilio, the
+// sms_enabled checkin-wizard branch) in case it's ever turned back on.
+const HIDDEN_FIELDS = [
+  'sms_enabled',
+  'notification_lead_minutes',
+  'no_show_timeout_minutes',
+  'welcome_sms_template',
+  'notification_sms_template',
+  'followup_sms_template',
+]
+
 const FIELD_LABELS: Record<string, string> = {
   sms_enabled: 'Collect Phone Number & Send SMS',
   avg_min_per_hole_small: 'Min Per Hole — Small Group (1–4 players)',
@@ -54,7 +66,7 @@ export default function SettingsForm() {
 
   return (
     <form onSubmit={handleSave} className="flex flex-col gap-6 max-w-2xl">
-      {Object.entries(FIELD_LABELS).map(([key, label]) => (
+      {Object.entries(FIELD_LABELS).filter(([key]) => !HIDDEN_FIELDS.includes(key)).map(([key, label]) => (
         <div key={key} className="flex flex-col gap-1">
           <label className="text-rc-green text-sm font-bold uppercase tracking-wider">
             {label}

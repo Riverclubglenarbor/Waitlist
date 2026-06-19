@@ -8,6 +8,7 @@ const makeParty = (overrides: Partial<Party>): Party => ({
   last_initial: 'D',
   party_size: 2,
   phone: '+12345678900',
+  paid: false,
   checked_in_at: new Date().toISOString(),
   status: 'waiting',
   ...overrides,
