@@ -1,0 +1,95 @@
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import PersonalTrackBoard from '@/components/track/PersonalTrackBoard'
+
+vi.mock('@/lib/supabase-browser', () => ({
+  createClient: () => ({
+    channel: () => ({
+      on: () => ({ subscribe: () => ({}) }),
+    }),
+    removeChannel: () => {},
+  }),
+}))
+
+const parties = [
+  {
+    id: 'first',
+    first_name: 'Sarah',
+    last_initial: 'D',
+    party_size: 2,
+    phone: null,
+    checked_in_at: new Date(Date.now() - 2000).toISOString(),
+    status: 'waiting',
+  },
+  {
+    id: 'second',
+    first_name: 'Mike',
+    last_initial: 'T',
+    party_size: 5,
+    phone: null,
+    checked_in_at: new Date(Date.now() - 1000).toISOString(),
+    status: 'waiting',
+  },
+]
+
+function mockFetch(readyResponse: { ok: boolean; body?: object } = { ok: true }) {
+  global.fetch = vi.fn((url: string) => {
+    const u = url.toString()
+    if (u.includes('/ready')) {
+      return Promise.resolve({ ok: readyResponse.ok, json: async () => readyResponse.body ?? {} })
+    }
+    if (u.includes('/api/parties')) {
+      return Promise.resolve({ json: async () => parties, ok: true })
+    }
+    if (u.includes('/api/settings')) {
+      return Promise.resolve({
+        json: async () => ({ avg_min_per_hole_small: '5', avg_min_per_hole_large: '7' }),
+        ok: true,
+      })
+    }
+    return Promise.resolve({ json: async () => ({}), ok: true })
+  }) as unknown as typeof fetch
+}
+
+beforeEach(() => {
+  vi.resetAllMocks()
+  mockFetch()
+})
+
+describe('PersonalTrackBoard', () => {
+  it('shows position and wait time when not first in line', async () => {
+    render(<PersonalTrackBoard id="second" />)
+    await waitFor(() => screen.getByText('#2'))
+    expect(screen.getByText('Mike T.')).toBeInTheDocument()
+    expect(screen.queryByText(/ready for the course/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the ready headline and button when first in line', async () => {
+    render(<PersonalTrackBoard id="first" />)
+    await waitFor(() => screen.getByText(/grab your putters/i))
+    expect(screen.getByRole('button', { name: /ready for the course/i })).toBeInTheDocument()
+  })
+
+  it('requires a second tap before calling the ready endpoint', async () => {
+    render(<PersonalTrackBoard id="first" />)
+    await waitFor(() => screen.getByRole('button', { name: /ready for the course/i }))
+    fireEvent.click(screen.getByRole('button', { name: /ready for the course/i }))
+    expect(screen.getByRole('button', { name: /tap again to confirm/i })).toBeInTheDocument()
+    const readyCalls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.filter(
+      c => c[0].toString().includes('/ready')
+    )
+    expect(readyCalls.length).toBe(0)
+  })
+
+  it('calls the ready endpoint and shows the success state on the second tap', async () => {
+    render(<PersonalTrackBoard id="first" />)
+    await waitFor(() => screen.getByRole('button', { name: /ready for the course/i }))
+    fireEvent.click(screen.getByRole('button', { name: /ready for the course/i }))
+    fireEvent.click(screen.getByRole('button', { name: /tap again to confirm/i }))
+    await waitFor(() => screen.getByText(/enjoy your round/i))
+  })
+
+  it('shows an expired message for an unknown party id', async () => {
+    render(<PersonalTrackBoard id="does-not-exist" />)
+    await waitFor(() => screen.getByText(/expired/i))
+  })
+})
