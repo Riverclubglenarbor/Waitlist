@@ -102,16 +102,17 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center px-6 text-center gap-4 transition-colors duration-700"
+      className="min-h-screen flex flex-col items-center justify-center px-6 text-center gap-4 transition-colors duration-[600ms] ease-out motion-reduce:transition-none"
       style={{ backgroundColor: bgColor }}
     >
       <p className="text-white/70 text-lg uppercase tracking-widest">{party.first_name} {party.last_initial}.</p>
       {position === 1 ? (
         <>
-          <p className="text-white text-3xl font-black max-w-xs">Grab your putters, hole 1 is ready!</p>
+          <p key="ready-headline" className="text-white text-3xl font-black max-w-xs animate-pop-in">Grab your putters, hole 1 is ready!</p>
           <button
             onClick={handleReady}
-            className="bg-white text-rc-navy px-8 py-4 rounded-xl text-xl font-bold mt-2"
+            className="bg-white text-rc-navy px-8 py-4 rounded-xl text-xl font-bold mt-2
+                       transition-all duration-150 active:scale-[0.97] motion-reduce:active:scale-100"
           >
             {confirming ? 'Tap again to confirm' : "I'm Ready for the Course"}
           </button>
@@ -120,7 +121,7 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
       ) : (
         <>
           <p className="text-white/60 text-xl uppercase tracking-widest">Position</p>
-          <p className="text-white text-6xl font-black">#{position}</p>
+          <p key={position} className="text-white text-6xl font-black animate-pop-in motion-reduce:animate-none">#{position}</p>
           <p className="text-white/80 text-2xl font-bold">~{wait} min</p>
         </>
       )}

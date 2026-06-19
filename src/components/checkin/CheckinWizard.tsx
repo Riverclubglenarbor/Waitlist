@@ -79,12 +79,16 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
 
   if (confirmedParties !== null) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-6 p-6">
+      <div className="flex flex-col items-center justify-center h-full gap-6 p-6 animate-pop-in motion-reduce:animate-none">
         <div className="text-rc-green text-6xl">✓</div>
         <div className="text-rc-navy text-2xl font-bold">Par-Tee Added!</div>
         <div className="flex flex-wrap items-start justify-center gap-6">
           {confirmedParties.map((party, i) => (
-            <div key={party.id} className="flex flex-col items-center gap-2">
+            <div
+              key={party.id}
+              className="flex flex-col items-center gap-2 animate-pop-in motion-reduce:animate-none"
+              style={{ animationDelay: `${i * 80}ms`, animationFillMode: 'backwards' }}
+            >
               {confirmedParties.length > 1 && (
                 <span className="text-rc-navy text-sm font-semibold">
                   Group {i + 1} of {confirmedParties.length}
@@ -99,7 +103,8 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
         </p>
         <button
           onClick={handleDone}
-          className="bg-rc-green text-white px-8 py-3 rounded-xl font-bold"
+          className="bg-rc-green text-white px-8 py-3 rounded-xl font-bold
+                     transition-all duration-150 active:scale-[0.97] motion-reduce:active:scale-100"
         >
           Done
         </button>
