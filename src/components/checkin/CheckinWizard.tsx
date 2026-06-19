@@ -87,6 +87,9 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
       <div className="flex flex-col items-center justify-center h-full gap-6 p-6 animate-pop-in motion-reduce:animate-none">
         <div className="text-rc-green text-6xl">✓</div>
         <div className="text-rc-navy text-2xl font-bold">Par-Tee Added!</div>
+        <p className="text-rc-green text-sm font-bold uppercase tracking-wider">
+          Show this to the guest
+        </p>
         <div className="flex flex-wrap items-start justify-center gap-6">
           {confirmedParties.map((party, i) => (
             <div
@@ -103,9 +106,6 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
             </div>
           ))}
         </div>
-        <p className="text-slate-400 text-sm text-center max-w-xs">
-          Have the customer scan to track their spot
-        </p>
         <button
           onClick={handleDone}
           className="bg-rc-green text-white px-8 py-3 rounded-xl font-bold
