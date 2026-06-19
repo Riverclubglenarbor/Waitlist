@@ -31,11 +31,27 @@ const parties = [
   },
 ]
 
-function mockFetch(readyResponse: { ok: boolean; body?: object } = { ok: true }) {
+function mockFetch(
+  readyResponse: { ok: boolean; body?: object } = { ok: true },
+  options: { partyById?: Record<string, { ok: boolean; body?: object }> } = {}
+) {
   global.fetch = vi.fn((url: string) => {
     const u = url.toString()
     if (u.includes('/ready')) {
       return Promise.resolve({ ok: readyResponse.ok, json: async () => readyResponse.body ?? {} })
+    }
+    const singleMatch = u.match(/\/api\/parties\/([^/]+)$/)
+    if (singleMatch) {
+      const partyId = singleMatch[1]
+      const override = options.partyById?.[partyId]
+      if (override) {
+        return Promise.resolve({ ok: override.ok, json: async () => override.body ?? {} })
+      }
+      const found = parties.find(p => p.id === partyId)
+      if (found) {
+        return Promise.resolve({ ok: true, json: async () => found })
+      }
+      return Promise.resolve({ ok: false, status: 404, json: async () => ({ error: 'Party not found' }) })
     }
     if (u.includes('/api/parties')) {
       return Promise.resolve({ json: async () => parties, ok: true })
@@ -90,6 +106,28 @@ describe('PersonalTrackBoard', () => {
 
   it('shows an expired message for an unknown party id', async () => {
     render(<PersonalTrackBoard id="does-not-exist" />)
+    await waitFor(() => screen.getByText(/expired/i))
+  })
+
+  it('shows the success message when staff completes checkout before the customer taps Ready', async () => {
+    // The party has already transitioned to "playing" via staff's Check In button,
+    // so it is absent from the polled /api/parties list, but the per-id GET reflects
+    // its true current status.
+    mockFetch(
+      { ok: true },
+      { partyById: { first: { ok: true, body: { ...parties[0], status: 'playing' } } } }
+    )
+    render(<PersonalTrackBoard id="first" />)
+    await waitFor(() => screen.getByText(/enjoy your round/i))
+    expect(screen.queryByText(/expired/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the expired message when staff marks the party a no-show', async () => {
+    mockFetch(
+      { ok: true },
+      { partyById: { first: { ok: true, body: { ...parties[0], status: 'no_show' } } } }
+    )
+    render(<PersonalTrackBoard id="first" />)
     await waitFor(() => screen.getByText(/expired/i))
   })
 
