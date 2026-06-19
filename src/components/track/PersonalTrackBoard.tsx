@@ -47,12 +47,17 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
       return
     }
     setReadyError('')
-    const res = await fetch(`/api/parties/${id}/ready`, { method: 'POST' })
-    if (res.ok) {
-      setDone(true)
-    } else {
-      const data = await res.json()
+    try {
+      const res = await fetch(`/api/parties/${id}/ready`, { method: 'POST' })
+      if (res.ok) {
+        setDone(true)
+        return
+      }
+      const data = await res.json().catch(() => ({}))
       setReadyError(data.error ?? 'Something went wrong')
+    } catch {
+      setReadyError('Network error — check connection')
+    } finally {
       setConfirming(false)
     }
   }

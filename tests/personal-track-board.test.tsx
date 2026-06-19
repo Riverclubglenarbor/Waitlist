@@ -92,4 +92,19 @@ describe('PersonalTrackBoard', () => {
     render(<PersonalTrackBoard id="does-not-exist" />)
     await waitFor(() => screen.getByText(/expired/i))
   })
+
+  it('shows a network error and resets the confirm state when the ready call rejects', async () => {
+    render(<PersonalTrackBoard id="first" />)
+    await waitFor(() => screen.getByRole('button', { name: /ready for the course/i }))
+    fireEvent.click(screen.getByRole('button', { name: /ready for the course/i }))
+
+    global.fetch = vi.fn((url: string) => {
+      if (url.toString().includes('/ready')) return Promise.reject(new Error('network down'))
+      return Promise.resolve({ json: async () => parties, ok: true })
+    }) as unknown as typeof fetch
+
+    fireEvent.click(screen.getByRole('button', { name: /tap again to confirm/i }))
+    await waitFor(() => screen.getByText(/network error/i))
+    expect(screen.getByRole('button', { name: /ready for the course/i })).toBeInTheDocument()
+  })
 })
