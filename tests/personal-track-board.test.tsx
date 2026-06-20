@@ -140,6 +140,32 @@ describe('PersonalTrackBoard', () => {
     await waitFor(() => screen.getByText(/expired/i))
   })
 
+  it('syncs the theme-color meta tag to the displayed background so Safari chrome matches', async () => {
+    // position 1 -> buzzerColor(1) is full green, matching the page background.
+    render(<PersonalTrackBoard id="first" />)
+    await waitFor(() => screen.getByText(/grab your putters/i))
+    const meta = document.querySelector('meta[name="theme-color"]')
+    expect(meta).not.toBeNull()
+    expect(meta!.getAttribute('content')).toBe('#6dc04b')
+  })
+
+  it('updates the theme-color meta tag when the page transitions to the done state', async () => {
+    render(<PersonalTrackBoard id="first" />)
+    await waitFor(() => screen.getByRole('button', { name: /ready for the course/i }))
+    fireEvent.click(screen.getByRole('button', { name: /ready for the course/i }))
+    fireEvent.click(screen.getByRole('button', { name: /tap again to confirm/i }))
+    await waitFor(() => screen.getByText(/enjoy your round/i))
+    const meta = document.querySelector('meta[name="theme-color"]')
+    expect(meta!.getAttribute('content')).toBe('#6DC04B')
+  })
+
+  it('sets the theme-color meta tag to navy for the expired state', async () => {
+    render(<PersonalTrackBoard id="does-not-exist" />)
+    await waitFor(() => screen.getByText(/expired/i))
+    const meta = document.querySelector('meta[name="theme-color"]')
+    expect(meta!.getAttribute('content')).toBe('#1E3A5F')
+  })
+
   it('shows a network error and resets the confirm state when the ready call rejects', async () => {
     render(<PersonalTrackBoard id="first" />)
     await waitFor(() => screen.getByRole('button', { name: /ready for the course/i }))

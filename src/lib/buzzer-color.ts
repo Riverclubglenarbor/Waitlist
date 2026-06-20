@@ -1,5 +1,5 @@
-const NAVY = '#1E3A5F'
-const GREEN = '#6DC04B'
+export const NAVY = '#1E3A5F'
+export const GREEN = '#6DC04B'
 const GRADIENT_START_POSITION = 8 // position at/beyond which the color is full navy
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {

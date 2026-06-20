@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getPartyPosition, getWaitMinutesForParty } from '@/lib/wait-time'
-import { buzzerColor } from '@/lib/buzzer-color'
+import { buzzerColor, NAVY, GREEN } from '@/lib/buzzer-color'
 import type { Party } from '@/types'
 
 export default function PersonalTrackBoard({ id }: { id: string }) {
@@ -70,14 +70,37 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
     }
   }
 
+  const isPlaying = self !== undefined && (done || self?.status === 'playing')
+  const isGone = self !== undefined && (!self || self.status === 'no_show' || self.status === 'removed')
+  const themeColor = self === undefined
+    ? NAVY
+    : isPlaying
+      ? GREEN
+      : isGone
+        ? NAVY
+        : buzzerColor(getPartyPosition(self, parties))
+
+  // Keep the browser/OS chrome (iOS status bar, Safari's toolbar) in sync
+  // with the page background. Without this, Safari only re-tints its own
+  // chrome on a real navigation — since this page's background changes
+  // entirely via client-side state (position improving, or flipping to the
+  // done/expired screens), the chrome would otherwise stay stuck on
+  // whatever color was present at the very first page load.
+  useEffect(() => {
+    let meta = document.querySelector('meta[name="theme-color"]')
+    if (!meta) {
+      meta = document.createElement('meta')
+      meta.setAttribute('name', 'theme-color')
+      document.head.appendChild(meta)
+    }
+    meta.setAttribute('content', themeColor)
+  }, [themeColor])
+
   // Wait for the initial per-id fetch before deciding which state to render,
   // so we don't briefly flash the "expired" state before data arrives.
   if (self === undefined) {
     return <div className="fixed inset-0 bg-rc-navy" />
   }
-
-  const isPlaying = done || self?.status === 'playing'
-  const isGone = !self || self.status === 'no_show' || self.status === 'removed'
 
   if (isPlaying) {
     return (
@@ -98,12 +121,11 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
   const party = self
   const position = getPartyPosition(party, parties)
   const wait = Math.round(getWaitMinutesForParty(party, parties, smallRate, largeRate))
-  const bgColor = buzzerColor(position)
 
   return (
     <div
       className="fixed inset-0 flex flex-col items-center justify-center px-6 text-center gap-4 transition-colors duration-[600ms] ease-out motion-reduce:transition-none"
-      style={{ backgroundColor: bgColor }}
+      style={{ backgroundColor: themeColor }}
     >
       <p className="text-white/70 text-lg uppercase tracking-widest">{party.first_name} {party.last_initial}.</p>
       {position === 1 ? (
