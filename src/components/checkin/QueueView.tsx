@@ -9,10 +9,10 @@ interface QueueViewProps {
   refreshKey?: number
 }
 
+// Only ever called with remainingSec > 0 — anything <= 0 renders "Now! ⛳" instead.
 function formatCountdown(totalSeconds: number): string {
-  const sign = totalSeconds < 0 ? '-' : ''
-  const m = Math.floor(Math.abs(totalSeconds) / 60)
-  return `${sign}${m}m`
+  const m = Math.floor(totalSeconds / 60)
+  return `${m}m`
 }
 
 export default function QueueView({ refreshKey }: QueueViewProps) {
@@ -185,11 +185,15 @@ export default function QueueView({ refreshKey }: QueueViewProps) {
               </div>
 
               {/* Countdown */}
-              <div className={`text-right min-w-[90px] shrink-0 font-mono font-bold text-lg
-                ${isCritical ? 'text-red-500' : isOverdue ? 'text-amber-500' : 'text-rc-navy'}`}>
-                {remainingSec <= 0 && remainingSec > -10
-                  ? <span className="text-rc-green animate-pulse font-sans">Now! ⛳</span>
-                  : formatCountdown(remainingSec)
+              <div className="text-right min-w-[90px] shrink-0 font-mono font-bold text-lg">
+                {remainingSec <= 0
+                  ? (
+                    <span className={`animate-pulse font-sans
+                      ${isCritical ? 'text-red-500' : isOverdue ? 'text-amber-500' : 'text-rc-green'}`}>
+                      Now! ⛳
+                    </span>
+                  )
+                  : <span className="text-rc-navy">{formatCountdown(remainingSec)}</span>
                 }
               </div>
 
