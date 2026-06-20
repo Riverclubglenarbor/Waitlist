@@ -73,7 +73,7 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
   // Wait for the initial per-id fetch before deciding which state to render,
   // so we don't briefly flash the "expired" state before data arrives.
   if (self === undefined) {
-    return <div className="min-h-screen bg-rc-navy" />
+    return <div className="fixed inset-0 bg-rc-navy" />
   }
 
   const isPlaying = done || self?.status === 'playing'
@@ -81,7 +81,7 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
 
   if (isPlaying) {
     return (
-      <div className="min-h-screen bg-rc-green flex items-center justify-center px-6 text-center">
+      <div className="fixed inset-0 bg-rc-green flex items-center justify-center px-6 text-center">
         <p className="text-white text-3xl font-black">You&apos;re all set — enjoy your round! ⛳</p>
       </div>
     )
@@ -89,7 +89,7 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
 
   if (isGone) {
     return (
-      <div className="min-h-screen bg-rc-navy flex items-center justify-center px-6 text-center">
+      <div className="fixed inset-0 bg-rc-navy flex items-center justify-center px-6 text-center">
         <p className="text-white/70 text-xl">This link has expired. Check with the front desk.</p>
       </div>
     )
@@ -102,7 +102,7 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center px-6 text-center gap-4 transition-colors duration-[600ms] ease-out motion-reduce:transition-none"
+      className="fixed inset-0 flex flex-col items-center justify-center px-6 text-center gap-4 transition-colors duration-[600ms] ease-out motion-reduce:transition-none"
       style={{ backgroundColor: bgColor }}
     >
       <p className="text-white/70 text-lg uppercase tracking-widest">{party.first_name} {party.last_initial}.</p>
