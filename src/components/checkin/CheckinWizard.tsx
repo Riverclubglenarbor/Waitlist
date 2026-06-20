@@ -83,32 +83,36 @@ export default function CheckinWizard({ onSuccess }: CheckinWizardProps) {
   }
 
   if (confirmedParties !== null) {
+    const single = confirmedParties.length === 1
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-6 p-6 animate-pop-in motion-reduce:animate-none">
+      <div className="fixed inset-0 z-50 bg-white flex flex-col items-center justify-center gap-6 p-6 animate-pop-in motion-reduce:animate-none">
         <div className="text-rc-green text-6xl">✓</div>
-        <div className="text-rc-navy text-2xl font-bold">Par-Tee Added!</div>
-        <p className="text-rc-green text-sm font-bold uppercase tracking-wider">
+        <div className="text-rc-navy text-3xl font-bold">Par-Tee Added!</div>
+        <p className="text-rc-green text-lg font-bold uppercase tracking-wider">
           Show this to the guest
         </p>
-        <div className="flex flex-wrap items-start justify-center gap-6">
+        <div className="flex flex-wrap items-start justify-center gap-10">
           {confirmedParties.map((party, i) => (
             <div
               key={party.id}
-              className="flex flex-col items-center gap-2 animate-pop-in motion-reduce:animate-none"
+              className="flex flex-col items-center gap-3 animate-pop-in motion-reduce:animate-none"
               style={{ animationDelay: `${i * 80}ms`, animationFillMode: 'backwards' }}
             >
-              {confirmedParties.length > 1 && (
-                <span className="text-rc-navy text-sm font-semibold">
+              {!single && (
+                <span className="text-rc-navy text-lg font-semibold">
                   Group {i + 1} of {confirmedParties.length}
                 </span>
               )}
-              <QRCodeSVG value={`https://river-club-waitlist.vercel.app/track/${party.id}`} size={140} />
+              <QRCodeSVG
+                value={`https://river-club-waitlist.vercel.app/track/${party.id}`}
+                size={single ? 420 : 260}
+              />
             </div>
           ))}
         </div>
         <button
           onClick={handleDone}
-          className="bg-rc-green text-white px-8 py-3 rounded-xl font-bold
+          className="bg-rc-green text-white px-12 py-4 rounded-xl text-xl font-bold
                      transition-all duration-150 active:scale-[0.97] motion-reduce:active:scale-100"
         >
           Done
