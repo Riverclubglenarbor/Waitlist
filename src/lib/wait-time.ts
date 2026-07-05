@@ -2,8 +2,18 @@ import type { Party } from '@/types'
 
 const LARGE_PARTY_THRESHOLD = 5
 
+// A newly checked-in party's public link shouldn't jump straight to "ready"
+// just because the queue is empty — staff still need this long to get them
+// to the tee, so every party's displayed wait floors at this value until
+// that much real time has actually passed since they checked in.
+const MINIMUM_WAIT_MINUTES = 10
+
 function rateForParty(partySize: number, smallRate: number, largeRate: number): number {
   return partySize >= LARGE_PARTY_THRESHOLD ? largeRate : smallRate
+}
+
+function minutesSince(isoTime: string, now: number): number {
+  return (now - new Date(isoTime).getTime()) / 60_000
 }
 
 export function calculateWaitMinutes(
@@ -29,14 +39,18 @@ export function getWaitMinutesForParty(
   party: Party,
   allParties: Party[],
   smallRate: number,
-  largeRate: number
+  largeRate: number,
+  extraFloorMinutes: number = 0,
+  now: number = Date.now()
 ): number {
   const ahead = allParties.filter(
     p =>
       (p.status === 'waiting' || p.status === 'notified') &&
       p.checked_in_at < party.checked_in_at
   )
-  return calculateWaitMinutes(ahead, smallRate, largeRate)
+  const queueWait = calculateWaitMinutes(ahead, smallRate, largeRate)
+  const floorRemaining = MINIMUM_WAIT_MINUTES + extraFloorMinutes - minutesSince(party.checked_in_at, now)
+  return Math.max(queueWait, floorRemaining)
 }
 
 // Returns the party's 1-based position in the active queue, or 0 if the

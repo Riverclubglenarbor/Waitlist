@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { calculateWaitMinutes, getQueueWaitMinutes, getPartyPosition } from '@/lib/wait-time'
+import { calculateWaitMinutes, getQueueWaitMinutes, getPartyPosition, getWaitMinutesForParty } from '@/lib/wait-time'
 import type { Party } from '@/types'
 
 const makeParty = (overrides: Partial<Party>): Party => ({
@@ -92,5 +92,41 @@ describe('getPartyPosition', () => {
     const playing = makeParty({ id: 'a', status: 'playing', checked_in_at: new Date(Date.now() - 2000).toISOString() })
     const waiting = makeParty({ id: 'b', status: 'waiting', checked_in_at: new Date(Date.now() - 1000).toISOString() })
     expect(getPartyPosition(waiting, [playing, waiting])).toBe(1)
+  })
+})
+
+describe('getWaitMinutesForParty — minimum wait floor', () => {
+  it('floors a freshly checked-in first-in-line party at 10 min instead of 0', () => {
+    const now = Date.now()
+    const party = makeParty({ id: 'a', checked_in_at: new Date(now).toISOString() })
+    expect(getWaitMinutesForParty(party, [party], 5, 7, 0, now)).toBe(10)
+  })
+
+  it('counts the floor down as real time passes since check-in', () => {
+    const now = Date.now()
+    const party = makeParty({ id: 'a', checked_in_at: new Date(now - 4 * 60_000).toISOString() })
+    expect(getWaitMinutesForParty(party, [party], 5, 7, 0, now)).toBe(6)
+  })
+
+  it('stops applying the floor once 10 minutes have actually elapsed', () => {
+    const now = Date.now()
+    const party = makeParty({ id: 'a', checked_in_at: new Date(now - 11 * 60_000).toISOString() })
+    expect(getWaitMinutesForParty(party, [party], 5, 7, 0, now)).toBe(0)
+  })
+
+  it('never lowers a wait that is already above the floor from real queue depth', () => {
+    const now = Date.now()
+    const ahead1 = makeParty({ id: 'a', party_size: 6, checked_in_at: new Date(now - 20 * 60_000).toISOString() })
+    const ahead2 = makeParty({ id: 'b', party_size: 6, checked_in_at: new Date(now - 19 * 60_000).toISOString() })
+    const party = makeParty({ id: 'c', checked_in_at: new Date(now).toISOString() })
+    // Two large-group parties ahead (7 min each = 14) already exceed the 10-min floor.
+    expect(getWaitMinutesForParty(party, [ahead1, ahead2, party], 5, 7, 0, now)).toBe(14)
+  })
+
+  it('raises the floor by the accumulated Add Time bump', () => {
+    const now = Date.now()
+    const party = makeParty({ id: 'a', checked_in_at: new Date(now).toISOString() })
+    // Base floor (10) + two Add Time clicks worth of extra floor (10) = 20.
+    expect(getWaitMinutesForParty(party, [party], 5, 7, 10, now)).toBe(20)
   })
 })

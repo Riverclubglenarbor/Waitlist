@@ -17,7 +17,8 @@ const parties = [
     last_initial: 'D',
     party_size: 2,
     phone: null,
-    checked_in_at: new Date(Date.now() - 60_000).toISOString(),
+    // Past the 10-minute minimum-wait floor for both parties below.
+    checked_in_at: new Date(Date.now() - 11 * 60_000).toISOString(),
     status: 'waiting',
   },
   {
@@ -26,7 +27,7 @@ const parties = [
     last_initial: 'T',
     party_size: 5,
     phone: null,
-    checked_in_at: new Date().toISOString(),
+    checked_in_at: new Date(Date.now() - 10.5 * 60_000).toISOString(),
     status: 'waiting',
   },
 ]

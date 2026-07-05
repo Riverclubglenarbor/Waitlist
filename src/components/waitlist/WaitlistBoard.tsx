@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { getQueueWaitMinutes } from '@/lib/wait-time'
+import { getQueueWaitMinutes, getWaitMinutesForParty } from '@/lib/wait-time'
 import EmptyBoard from './EmptyBoard'
 import OdometerNumber from './OdometerNumber'
 import Image from 'next/image'
@@ -23,6 +23,7 @@ export default function WaitlistBoard() {
   const [parties, setParties] = useState<Party[]>([])
   const [smallRate, setSmallRate] = useState(4)
   const [largeRate, setLargeRate] = useState(5)
+  const [extraFloorMinutes, setExtraFloorMinutes] = useState(0)
 
   const fetchAll = useCallback(async () => {
     try {
@@ -36,6 +37,7 @@ export default function WaitlistBoard() {
       const fallback = parseFloat(settingsData.avg_min_per_hole ?? '4')
       setSmallRate(parseFloat(settingsData.avg_min_per_hole_small ?? String(fallback)))
       setLargeRate(parseFloat(settingsData.avg_min_per_hole_large ?? String(fallback + 1)))
+      setExtraFloorMinutes(parseFloat(settingsData.add_time_total_minutes ?? '0'))
     } catch (e) {
       console.error('fetchAll failed', e)
     }
@@ -82,10 +84,7 @@ export default function WaitlistBoard() {
 
         <div className="w-full flex flex-col gap-3 overflow-y-auto">
           {parties.slice(0, 10).map((party, i) => {
-            const waitAhead = parties
-              .slice(0, i)
-              .reduce((sum, p) => sum + (p.party_size >= 5 ? largeRate : smallRate), 0)
-            const wait = Math.round(waitAhead)
+            const wait = Math.round(getWaitMinutesForParty(party, parties, smallRate, largeRate, extraFloorMinutes))
 
             return (
               <div

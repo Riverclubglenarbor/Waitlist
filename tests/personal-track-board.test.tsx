@@ -17,7 +17,8 @@ const parties = [
     last_initial: 'D',
     party_size: 2,
     phone: null,
-    checked_in_at: new Date(Date.now() - 2000).toISOString(),
+    // Past the 10-minute minimum-wait floor, so it reads as actually ready.
+    checked_in_at: new Date(Date.now() - 11 * 60_000).toISOString(),
     status: 'waiting',
   },
   {
@@ -26,7 +27,7 @@ const parties = [
     last_initial: 'T',
     party_size: 5,
     phone: null,
-    checked_in_at: new Date(Date.now() - 1000).toISOString(),
+    checked_in_at: new Date(Date.now() - 11 * 60_000 + 1000).toISOString(),
     status: 'waiting',
   },
 ]
@@ -83,6 +84,35 @@ describe('PersonalTrackBoard', () => {
     render(<PersonalTrackBoard id="first" />)
     await waitFor(() => screen.getByText(/grab your putters/i))
     expect(screen.getByRole('button', { name: /ready for the course/i })).toBeInTheDocument()
+  })
+
+  it('shows a countdown instead of the ready screen for a freshly checked-in first-in-line party', async () => {
+    const brandNew = {
+      id: 'brandnew',
+      first_name: 'Alex',
+      last_initial: 'R',
+      party_size: 2,
+      phone: null,
+      checked_in_at: new Date().toISOString(),
+      status: 'waiting',
+    }
+    global.fetch = vi.fn((url: string) => {
+      const u = url.toString()
+      if (u.endsWith('/api/parties/brandnew')) return Promise.resolve({ ok: true, json: async () => brandNew })
+      if (u.includes('/api/parties')) return Promise.resolve({ ok: true, json: async () => [brandNew] })
+      if (u.includes('/api/settings')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ avg_min_per_hole_small: '5', avg_min_per_hole_large: '7' }),
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    }) as unknown as typeof fetch
+
+    render(<PersonalTrackBoard id="brandnew" />)
+    await waitFor(() => screen.getByText('#1'))
+    expect(screen.queryByText(/grab your putters/i)).not.toBeInTheDocument()
+    expect(screen.getByText('~10 min')).toBeInTheDocument()
   })
 
   it('requires a second tap before calling the ready endpoint', async () => {
