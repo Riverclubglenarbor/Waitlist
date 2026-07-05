@@ -162,4 +162,24 @@ describe('getWaitMinutesForParty — shared queue floor', () => {
     expect(getWaitMinutesForParty(third, all, 5, 7, now)).toBe(22)
     expect(getWaitMinutesForParty(third, all, 10, 12, now)).toBe(32)
   })
+
+  it('checking someone in early pulls everyone behind them forward too — it works both ways', () => {
+    const now = Date.now()
+    const first = makeParty({ id: 'a', party_size: 2, checked_in_at: new Date(now).toISOString() })
+    const second = makeParty({ id: 'b', party_size: 2, checked_in_at: new Date(now + 60_000).toISOString() })
+    const third = makeParty({ id: 'c', party_size: 2, checked_in_at: new Date(now + 2 * 60_000).toISOString() })
+    const twoMinLater = now + 2 * 60_000
+
+    // Normal decay 2 min after first checked in, all three still queued.
+    expect(getWaitMinutesForParty(second, [first, second, third], 5, 7, twoMinLater)).toBe(13)
+    expect(getWaitMinutesForParty(third, [first, second, third], 5, 7, twoMinLater)).toBe(18)
+
+    // Staff check first in early (ahead of their own floor expiring) — second
+    // becomes the new front and inherits a fresh floor off their own
+    // check-in time; third drops by first's whole rate contribution.
+    const firstPlayed = { ...first, status: 'playing' as const }
+    const activeNow = [firstPlayed, second, third]
+    expect(getWaitMinutesForParty(second, activeNow, 5, 7, twoMinLater)).toBe(9)
+    expect(getWaitMinutesForParty(third, activeNow, 5, 7, twoMinLater)).toBe(14)
+  })
 })
