@@ -49,21 +49,28 @@ describe('calculateWaitMinutes', () => {
 })
 
 describe('getQueueWaitMinutes', () => {
-  it('returns 0 when no active parties', () => {
+  it('is just the 10-min base when no active parties are queued', () => {
     const parties = [
       makeParty({ status: 'playing' }),
       makeParty({ status: 'removed' }),
     ]
-    expect(getQueueWaitMinutes(parties, 5, 7)).toBe(0)
+    expect(getQueueWaitMinutes(parties, 5, 7)).toBe(10)
   })
 
-  it('counts waiting and notified parties only, flat per group', () => {
+  it('adds the 10-min base to the flat per-group total, counting only waiting/notified', () => {
+    const now = Date.now()
     const parties = [
-      makeParty({ party_size: 2, status: 'waiting' }),
-      makeParty({ party_size: 2, status: 'notified' }),
-      makeParty({ party_size: 2, status: 'playing' }),
+      makeParty({ party_size: 2, status: 'waiting', checked_in_at: new Date(now).toISOString() }),
+      makeParty({ party_size: 2, status: 'notified', checked_in_at: new Date(now).toISOString() }),
+      makeParty({ party_size: 2, status: 'playing', checked_in_at: new Date(now).toISOString() }),
     ]
-    expect(getQueueWaitMinutes(parties, 5, 7)).toBe(10)
+    expect(getQueueWaitMinutes(parties, 5, 7, now)).toBe(20)
+  })
+
+  it('decays with real time since the queue\'s front checked in', () => {
+    const now = Date.now()
+    const parties = [makeParty({ party_size: 2, checked_in_at: new Date(now - 4 * 60_000).toISOString() })]
+    expect(getQueueWaitMinutes(parties, 5, 7, now)).toBe(11)
   })
 })
 
@@ -95,31 +102,64 @@ describe('getPartyPosition', () => {
   })
 })
 
-describe('getWaitMinutesForParty — minimum wait floor', () => {
-  it('floors a freshly checked-in first-in-line party at 10 min instead of 0', () => {
+describe('getWaitMinutesForParty — shared queue floor', () => {
+  it('starts a lone first-in-line party at exactly 10 min', () => {
     const now = Date.now()
     const party = makeParty({ id: 'a', checked_in_at: new Date(now).toISOString() })
     expect(getWaitMinutesForParty(party, [party], 5, 7, now)).toBe(10)
   })
 
-  it('counts the floor down as real time passes since check-in', () => {
+  it('counts that 10 min down as real time passes, going below 10', () => {
     const now = Date.now()
     const party = makeParty({ id: 'a', checked_in_at: new Date(now - 4 * 60_000).toISOString() })
     expect(getWaitMinutesForParty(party, [party], 5, 7, now)).toBe(6)
   })
 
-  it('stops applying the floor once 10 minutes have actually elapsed', () => {
+  it('clamps at 0 (ready) once the base and queue-ahead time have both elapsed', () => {
     const now = Date.now()
     const party = makeParty({ id: 'a', checked_in_at: new Date(now - 11 * 60_000).toISOString() })
     expect(getWaitMinutesForParty(party, [party], 5, 7, now)).toBe(0)
   })
 
-  it('never lowers a wait that is already above the floor from real queue depth', () => {
+  it('starts the second party (small group ahead) at 15 — base 10 + that group\'s rate', () => {
     const now = Date.now()
-    const ahead1 = makeParty({ id: 'a', party_size: 6, checked_in_at: new Date(now - 20 * 60_000).toISOString() })
-    const ahead2 = makeParty({ id: 'b', party_size: 6, checked_in_at: new Date(now - 19 * 60_000).toISOString() })
-    const party = makeParty({ id: 'c', checked_in_at: new Date(now).toISOString() })
-    // Two large-group parties ahead (7 min each = 14) already exceed the 10-min floor.
-    expect(getWaitMinutesForParty(party, [ahead1, ahead2, party], 5, 7, now)).toBe(14)
+    const first = makeParty({ id: 'a', party_size: 2, checked_in_at: new Date(now).toISOString() })
+    const second = makeParty({ id: 'b', party_size: 2, checked_in_at: new Date(now + 1000).toISOString() })
+    expect(getWaitMinutesForParty(second, [first, second], 5, 7, now)).toBe(15)
+  })
+
+  it('starts the second party at 17 when the group ahead of them is large', () => {
+    const now = Date.now()
+    const first = makeParty({ id: 'a', party_size: 6, checked_in_at: new Date(now).toISOString() })
+    const second = makeParty({ id: 'b', party_size: 2, checked_in_at: new Date(now + 1000).toISOString() })
+    expect(getWaitMinutesForParty(second, [first, second], 5, 7, now)).toBe(17)
+  })
+
+  it('decays the first and second party together, in lockstep, off the same shared clock', () => {
+    const now = Date.now()
+    const first = makeParty({ id: 'a', party_size: 2, checked_in_at: new Date(now - 4 * 60_000).toISOString() })
+    const second = makeParty({ id: 'b', party_size: 2, checked_in_at: new Date(now - 4 * 60_000 + 1000).toISOString() })
+    expect(getWaitMinutesForParty(first, [first, second], 5, 7, now)).toBe(6)
+    expect(getWaitMinutesForParty(second, [first, second], 5, 7, now)).toBe(11)
+  })
+
+  it('raising the rate via Add Time raises everyone queued behind it', () => {
+    const now = Date.now()
+    const first = makeParty({ id: 'a', party_size: 2, checked_in_at: new Date(now).toISOString() })
+    const second = makeParty({ id: 'b', party_size: 2, checked_in_at: new Date(now + 1000).toISOString() })
+    // Before Add Time: 15. After one +5 click on the small rate (5 -> 10): 20.
+    expect(getWaitMinutesForParty(second, [first, second], 5, 7, now)).toBe(15)
+    expect(getWaitMinutesForParty(second, [first, second], 10, 7, now)).toBe(20)
+  })
+
+  it('compounds the Add Time bump for parties with multiple groups ahead of them', () => {
+    const now = Date.now()
+    const first = makeParty({ id: 'a', party_size: 2, checked_in_at: new Date(now).toISOString() })
+    const second = makeParty({ id: 'b', party_size: 6, checked_in_at: new Date(now + 1000).toISOString() })
+    const third = makeParty({ id: 'c', party_size: 2, checked_in_at: new Date(now + 2000).toISOString() })
+    const all = [first, second, third]
+    // Before: 10 + 5 + 7 = 22. After +5 on both rates: 10 + 10 + 12 = 32 (+10, not +5).
+    expect(getWaitMinutesForParty(third, all, 5, 7, now)).toBe(22)
+    expect(getWaitMinutesForParty(third, all, 10, 12, now)).toBe(32)
   })
 })

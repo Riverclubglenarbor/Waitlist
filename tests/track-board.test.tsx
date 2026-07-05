@@ -17,8 +17,7 @@ const parties = [
     last_initial: 'D',
     party_size: 2,
     phone: null,
-    // Past the 10-minute minimum-wait floor for both parties below.
-    checked_in_at: new Date(Date.now() - 11 * 60_000).toISOString(),
+    checked_in_at: new Date().toISOString(),
     status: 'waiting',
   },
   {
@@ -27,7 +26,7 @@ const parties = [
     last_initial: 'T',
     party_size: 5,
     phone: null,
-    checked_in_at: new Date(Date.now() - 10.5 * 60_000).toISOString(),
+    checked_in_at: new Date(Date.now() + 1000).toISOString(),
     status: 'waiting',
   },
 ]
@@ -53,10 +52,10 @@ describe('TrackBoard', () => {
     render(<TrackBoard />)
     await waitFor(() => screen.getByText('Sarah D.'))
     expect(screen.getByText('Mike T.')).toBeInTheDocument()
-    // Sarah is first in line -> 0 min wait ahead of her
-    expect(screen.getByText('Now!')).toBeInTheDocument()
-    // Mike is behind Sarah's small-group rate of 5 min
-    expect(screen.getByText('5m')).toBeInTheDocument()
+    // Sarah is first in line -> flat 10-min queue floor
+    expect(screen.getByText('10m')).toBeInTheDocument()
+    // Mike is behind Sarah's small-group rate (5) on top of that same floor -> 15
+    expect(screen.getByText('15m')).toBeInTheDocument()
   })
 
   it('shows an empty-queue message when there are no parties', async () => {
