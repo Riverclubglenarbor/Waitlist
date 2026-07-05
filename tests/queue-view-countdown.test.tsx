@@ -29,9 +29,9 @@ function mockFetch(parties: unknown[]) {
 
 describe('QueueView countdown', () => {
   it('never shows a negative minute count for the first party in queue, no matter how long they have waited', async () => {
-    // First party in queue has zero wait-ahead by construction, so their
-    // computed "tee time" equals their own check-in moment. 90 seconds after
-    // checking in, this should still read as "ready now", not "-1m".
+    // First party has zero wait-ahead, so their whole countdown is the
+    // shared 10-min floor. 20 minutes since check-in is well past that,
+    // so this should read as "ready now", not a literal negative number.
     mockFetch([
       {
         id: '1',
@@ -40,7 +40,7 @@ describe('QueueView countdown', () => {
         party_size: 2,
         phone: null,
         paid: false,
-        checked_in_at: new Date(Date.now() - 90_000).toISOString(),
+        checked_in_at: new Date(Date.now() - 20 * 60_000).toISOString(),
         status: 'waiting',
       },
     ])
@@ -59,7 +59,7 @@ describe('QueueView countdown', () => {
         party_size: 2,
         phone: null,
         paid: false,
-        checked_in_at: new Date(Date.now() - 150_000).toISOString(),
+        checked_in_at: new Date(Date.now() - 25 * 60_000).toISOString(),
         status: 'waiting',
       },
     ])
@@ -75,7 +75,7 @@ describe('QueueView countdown', () => {
         id: '1',
         first_name: 'Sarah',
         last_initial: 'D',
-        party_size: 6, // large group -> larger per-hole rate, pushes tee time into the future
+        party_size: 6, // large group -> larger per-hole rate, pushes Mike's tee time further out
         phone: null,
         paid: false,
         checked_in_at: new Date().toISOString(),
@@ -88,14 +88,15 @@ describe('QueueView countdown', () => {
         party_size: 2,
         phone: null,
         paid: false,
-        checked_in_at: new Date().toISOString(),
+        checked_in_at: new Date(Date.now() + 1000).toISOString(),
         status: 'waiting',
       },
     ])
     render(<QueueView />)
     await waitFor(() => screen.getByText('Mike T.'))
-    // Mike is second in line behind a large group, so his countdown should
-    // be a normal positive minute value, not "now".
-    expect(screen.getByText(/^\d+m$/)).toBeInTheDocument()
+    // Settings fetch isn't mocked here, so rates fall back to the
+    // component defaults (small=4, large=5). Mike is second in line behind
+    // a large group: floor (10) + that group's rate (5) = 15.
+    expect(screen.getByText('15m')).toBeInTheDocument()
   })
 })

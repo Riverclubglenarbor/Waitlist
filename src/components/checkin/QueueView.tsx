@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { getRawWaitMinutesForParty } from '@/lib/wait-time'
 import type { Party } from '@/types'
 
 type ActionState = { id: string; type: 'checkin' | 'resend' | 'paid' | 'remove' } | null
@@ -120,23 +121,16 @@ export default function QueueView({ refreshKey }: QueueViewProps) {
     )
   }
 
-  // Absolute tee time per party: anchored to first party's check-in
-  const firstCheckinMs = new Date(parties[0].checked_in_at).getTime()
-  let cumulativeWaitMs = 0
-  const teeTimes = parties.map(p => {
-    const teeTimeMs = firstCheckinMs + cumulativeWaitMs
-    const rate = p.party_size >= 5 ? largeRate : smallRate
-    cumulativeWaitMs += rate * 60_000
-    return teeTimeMs
-  })
-
   return (
     <div className="flex flex-col gap-3">
       {parties.map((party, i) => {
         const isLoading = loading?.id === party.id
         const partyFlash = flash?.id === party.id ? flash : null
-        const remainingMs = teeTimes[i] - now
-        const remainingSec = Math.floor(remainingMs / 1000)
+        // Same shared formula the customer-facing pages use, so staff see
+        // the identical number — just unclamped, so it can go negative to
+        // drive the overdue/critical states below.
+        const rawWaitMinutes = getRawWaitMinutesForParty(party, parties, smallRate, largeRate, now)
+        const remainingSec = Math.round(rawWaitMinutes * 60)
         const isOverdue = remainingSec < 0
         const isCritical = remainingSec <= -120 // -2 minutes
 

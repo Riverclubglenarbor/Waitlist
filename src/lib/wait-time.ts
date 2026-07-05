@@ -48,7 +48,10 @@ export function getQueueWaitMinutes(
   return Math.max(0, MINIMUM_WAIT_MINUTES + calculateWaitMinutes(active, smallRate, largeRate) - elapsed)
 }
 
-export function getWaitMinutesForParty(
+// Unclamped version of getWaitMinutesForParty's math — goes negative once a
+// party is overdue, which staff views use to drive urgency states. Customer-
+// facing views should use getWaitMinutesForParty instead, which floors at 0.
+export function getRawWaitMinutesForParty(
   party: Party,
   allParties: Party[],
   smallRate: number,
@@ -58,7 +61,17 @@ export function getWaitMinutesForParty(
   const active = activeParties(allParties)
   const ahead = active.filter(p => p.checked_in_at < party.checked_in_at)
   const elapsed = elapsedSinceQueueStart(active, now)
-  return Math.max(0, MINIMUM_WAIT_MINUTES + calculateWaitMinutes(ahead, smallRate, largeRate) - elapsed)
+  return MINIMUM_WAIT_MINUTES + calculateWaitMinutes(ahead, smallRate, largeRate) - elapsed
+}
+
+export function getWaitMinutesForParty(
+  party: Party,
+  allParties: Party[],
+  smallRate: number,
+  largeRate: number,
+  now: number = Date.now()
+): number {
+  return Math.max(0, getRawWaitMinutesForParty(party, allParties, smallRate, largeRate, now))
 }
 
 // Returns the party's 1-based position in the active queue, or 0 if the
