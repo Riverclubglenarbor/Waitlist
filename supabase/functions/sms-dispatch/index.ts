@@ -27,6 +27,13 @@ function interpolate(template: string, vars: Record<string, string | number>): s
   )
 }
 
+// Kept in sync by hand with src/lib/wait-time.ts's getWaitMinutesForParty —
+// this Deno edge function is a separate deployment target and can't import
+// that module directly. If you change the wait formula there, mirror it
+// here too, or the auto-notify/no-show timers will drift out of sync with
+// what customers and staff actually see (this happened once already).
+const MINIMUM_WAIT_MINUTES = 10
+
 function calculateWaitMinutes(
   parties: Pick<Party, 'party_size'>[],
   smallRate: number,
@@ -41,13 +48,18 @@ function getEstimatedTeeTime(
   smallRate: number,
   largeRate: number
 ): Date {
-  const ahead = allParties.filter(
-    p =>
-      (p.status === 'waiting' || p.status === 'notified') &&
-      p.checked_in_at < party.checked_in_at
+  const active = allParties.filter(p => p.status === 'waiting' || p.status === 'notified')
+  const ahead = active.filter(p => p.checked_in_at < party.checked_in_at)
+  const earliest = active.reduce(
+    (min, p) => (p.checked_in_at < min ? p.checked_in_at : min),
+    active[0]?.checked_in_at ?? party.checked_in_at
   )
-  const waitMs = calculateWaitMinutes(ahead, smallRate, largeRate) * 60_000
-  return new Date(Date.now() + waitMs)
+  const elapsedMinutes = (Date.now() - new Date(earliest).getTime()) / 60_000
+  const waitMinutes = Math.max(
+    0,
+    MINIMUM_WAIT_MINUTES + calculateWaitMinutes(ahead, smallRate, largeRate) - elapsedMinutes
+  )
+  return new Date(Date.now() + waitMinutes * 60_000)
 }
 
 async function sendSms(to: string, body: string): Promise<void> {

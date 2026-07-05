@@ -179,16 +179,21 @@ export default function QueueView({ refreshKey }: QueueViewProps) {
               </div>
 
               {/* Countdown */}
-              <div className="text-right min-w-[90px] shrink-0 font-mono font-bold text-lg">
-                {remainingSec <= 0
-                  ? (
-                    <span className={`animate-pulse font-sans
-                      ${isCritical ? 'text-red-500' : isOverdue ? 'text-amber-500' : 'text-rc-green'}`}>
-                      Now! ⛳
-                    </span>
-                  )
-                  : <span className="text-rc-navy">{formatCountdown(remainingSec)}</span>
-                }
+              <div className="text-right min-w-[90px] shrink-0">
+                <p className="text-slate-400 text-[0.65rem] font-semibold uppercase tracking-wide mb-0.5">
+                  Time Till Tee Off
+                </p>
+                <div className="font-mono font-bold text-lg">
+                  {remainingSec <= 0
+                    ? (
+                      <span className={`animate-pulse font-sans
+                        ${isCritical ? 'text-red-500' : isOverdue ? 'text-amber-500' : 'text-rc-green'}`}>
+                        Now! ⛳
+                      </span>
+                    )
+                    : <span className="text-rc-navy">{formatCountdown(remainingSec)}</span>
+                  }
+                </div>
               </div>
 
               {/* Actions */}
