@@ -23,7 +23,6 @@ export default function WaitlistBoard() {
   const [parties, setParties] = useState<Party[]>([])
   const [smallRate, setSmallRate] = useState(4)
   const [largeRate, setLargeRate] = useState(5)
-  const [extraFloorMinutes, setExtraFloorMinutes] = useState(0)
 
   const fetchAll = useCallback(async () => {
     try {
@@ -37,7 +36,6 @@ export default function WaitlistBoard() {
       const fallback = parseFloat(settingsData.avg_min_per_hole ?? '4')
       setSmallRate(parseFloat(settingsData.avg_min_per_hole_small ?? String(fallback)))
       setLargeRate(parseFloat(settingsData.avg_min_per_hole_large ?? String(fallback + 1)))
-      setExtraFloorMinutes(parseFloat(settingsData.add_time_total_minutes ?? '0'))
     } catch (e) {
       console.error('fetchAll failed', e)
     }
@@ -84,7 +82,7 @@ export default function WaitlistBoard() {
 
         <div className="w-full flex flex-col gap-3 overflow-y-auto">
           {parties.slice(0, 10).map((party, i) => {
-            const wait = Math.round(getWaitMinutesForParty(party, parties, smallRate, largeRate, extraFloorMinutes))
+            const wait = Math.round(getWaitMinutesForParty(party, parties, smallRate, largeRate))
 
             return (
               <div

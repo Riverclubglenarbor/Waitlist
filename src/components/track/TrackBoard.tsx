@@ -12,7 +12,6 @@ export default function TrackBoard() {
   const [parties, setParties] = useState<Party[]>([])
   const [smallRate, setSmallRate] = useState(4)
   const [largeRate, setLargeRate] = useState(5)
-  const [extraFloorMinutes, setExtraFloorMinutes] = useState(0)
 
   const fetchAll = useCallback(async () => {
     try {
@@ -26,7 +25,6 @@ export default function TrackBoard() {
       const fallback = parseFloat(settingsData.avg_min_per_hole ?? '4')
       setSmallRate(parseFloat(settingsData.avg_min_per_hole_small ?? String(fallback)))
       setLargeRate(parseFloat(settingsData.avg_min_per_hole_large ?? String(fallback + 1)))
-      setExtraFloorMinutes(parseFloat(settingsData.add_time_total_minutes ?? '0'))
     } catch (e) {
       console.error('fetchAll failed', e)
     }
@@ -52,7 +50,7 @@ export default function TrackBoard() {
       ) : (
         <div className="w-full max-w-md flex flex-col gap-3">
           {parties.map((party, i) => {
-            const wait = Math.round(getWaitMinutesForParty(party, parties, smallRate, largeRate, extraFloorMinutes))
+            const wait = Math.round(getWaitMinutesForParty(party, parties, smallRate, largeRate))
             return (
               <div
                 key={party.id}

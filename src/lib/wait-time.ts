@@ -40,7 +40,6 @@ export function getWaitMinutesForParty(
   allParties: Party[],
   smallRate: number,
   largeRate: number,
-  extraFloorMinutes: number = 0,
   now: number = Date.now()
 ): number {
   const ahead = allParties.filter(
@@ -49,7 +48,7 @@ export function getWaitMinutesForParty(
       p.checked_in_at < party.checked_in_at
   )
   const queueWait = calculateWaitMinutes(ahead, smallRate, largeRate)
-  const floorRemaining = MINIMUM_WAIT_MINUTES + extraFloorMinutes - minutesSince(party.checked_in_at, now)
+  const floorRemaining = MINIMUM_WAIT_MINUTES - minutesSince(party.checked_in_at, now)
   return Math.max(queueWait, floorRemaining)
 }
 

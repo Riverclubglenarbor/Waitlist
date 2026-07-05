@@ -10,7 +10,6 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
   const [self, setSelf] = useState<Party | null | undefined>(undefined)
   const [smallRate, setSmallRate] = useState(4)
   const [largeRate, setLargeRate] = useState(5)
-  const [extraFloorMinutes, setExtraFloorMinutes] = useState(0)
   const [confirming, setConfirming] = useState(false)
   const [readyError, setReadyError] = useState('')
   const [done, setDone] = useState(false)
@@ -28,7 +27,6 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
       const fallback = parseFloat(settingsData.avg_min_per_hole ?? '4')
       setSmallRate(parseFloat(settingsData.avg_min_per_hole_small ?? String(fallback)))
       setLargeRate(parseFloat(settingsData.avg_min_per_hole_large ?? String(fallback + 1)))
-      setExtraFloorMinutes(parseFloat(settingsData.add_time_total_minutes ?? '0'))
       if (selfRes.ok) {
         const selfData = await selfRes.json()
         setSelf(selfData)
@@ -122,7 +120,7 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
 
   const party = self
   const position = getPartyPosition(party, parties)
-  const wait = Math.round(getWaitMinutesForParty(party, parties, smallRate, largeRate, extraFloorMinutes))
+  const wait = Math.round(getWaitMinutesForParty(party, parties, smallRate, largeRate))
 
   return (
     <div
