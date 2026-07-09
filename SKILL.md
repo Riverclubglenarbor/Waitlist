@@ -81,3 +81,16 @@ supabase/functions/sms-dispatch/index.ts    — cron (pg_cron, every minute) —
 
 - No staging environment — Vitest unit/component tests run locally against mocked fetch, but end-to-end verification happens directly against the live production app and its real Supabase project. When doing that: use clearly-named test parties (e.g. `ZTest1`), verify via the real UI/Playwright, and remove/check-in the test parties before finishing so production is left clean. Don't mutate live settings (rates, Add Time) without explicit go-ahead each time — that's genuinely shared production data, not local test fixtures.
 - Time-dependent tests must pass an explicit `now` and use fixed `checked_in_at` offsets in whole minutes (not seconds) — fractional-minute offsets produce non-integer expected values that are flaky against real wall-clock drift during test execution. See `tests/wait-time.test.ts` for the pattern.
+
+## Product & brand facts
+
+*(Folded in 2026-07-09 from stranded June-era memory; formula/rates above remain authoritative where they overlap.)*
+
+- Client: **River Club Glen Arbor** (rcglenarbor.com) — Ben is their tech guy. App replaced TablesReady (boring UI, $60/mo for 2,500 messages).
+- Groups are **"Par-Tees"**, not parties. Parties larger than 6 auto-split into multiple queue entries (max 6 per tee time), labeled "Sarah D. 1", "Sarah D. 2".
+- The wait rate is **flat per group, not multiplied by headcount**: ≤4 golfers → `avg_min_per_hole_small`, ≥5 → `avg_min_per_hole_large`; both adjustable in `/admin` (June values were 5/7 — live values are whatever `/admin` says now).
+- **SMS product shape** (dormant — see Known gaps): 3 templates (welcome on check-in, pre-tee "come grab your putters," no-show follow-up), all editable in `/admin`; manual per-group Resend button; auto-resend when a group runs 2+ min past estimated tee time. Twilio long code `+12313866460`; 10DLC brand/campaign registration was still pending as of June 2026.
+- **No queue close time** — open-ended by design (a closed-time check was deliberately removed).
+- **`/waitlist` TV board** runs via OptiSign on a portrait 1080×1920 screen viewed across a room: logo pinned to the top edge / motto to the bottom of a fixed `h-screen` column, oversized single-line text. Active queue: `OdometerNumber.tsx` renders the hero wait number in fixed-width digit slots (no horizontal jump as digit count changes) with only the real digits centered. Empty queue: `EmptyBoard.tsx` rotates 5 sayings (8s) inside a fixed-height vertically-centered box so differing line-wraps never shift the anchor; sayings are admin-editable (`empty_board_message_1..5` in the settings key-value table, code falls back to hardcoded wording) — only the slide-5 "El Gringo Loco" promo image (`/el-gringo-loco.png`) is hardcoded.
+- **`/admin` is PIN-gated** (default 1234). Ben wants the PIN gate redesigned as a left-hand rail instead of a full-screen gate — not yet done.
+- **Brand:** green `#6DC04B` (stencil "RIVER CLUB" wordmark) · navy `#1E3A5F` (script subtext) · tagline *putt · party · eat · repeat* · favicon = bear holding a golf flag (`Bear-in-Circle.png`) · TV-board display text in Montserrat.
