@@ -27,11 +27,20 @@ function interpolate(template: string, vars: Record<string, string | number>): s
   )
 }
 
-// Kept in sync by hand with src/lib/wait-time.ts's getWaitMinutesForParty —
+// Kept in sync by hand with src/lib/wait-time.ts + src/lib/queue-epoch.ts —
 // this Deno edge function is a separate deployment target and can't import
-// that module directly. If you change the wait formula there, mirror it
+// those modules directly. If you change the wait formula there, mirror it
 // here too, or the auto-notify/no-show timers will drift out of sync with
 // what customers and staff actually see (this happened once already).
+//
+// NOTE (2026-07-18): updated to the epoch-based model (elapsed time comes
+// from the persisted queue_epoch_at setting, and only still-'waiting'
+// parties count toward anyone's wait — 'notified' parties have already
+// been called up). This copy is STILL NOT DEPLOYED — no Supabase CLI
+// access to this client's project (see SKILL.md "Known gaps"). Before ever
+// re-enabling this cron, also note its auto-notify status flip now calls
+// the advance_queue_epoch RPC (see below), which requires the
+// *advance_queue_epoch_function.sql migration to be applied first.
 const MINIMUM_WAIT_MINUTES = 10
 
 function calculateWaitMinutes(
@@ -42,19 +51,38 @@ function calculateWaitMinutes(
   return parties.reduce((total, p) => total + (p.party_size >= 5 ? largeRate : smallRate), 0)
 }
 
+// Mirrors src/lib/queue-epoch.ts parseEpochMs.
+function parseEpochMs(settings: Settings, fallbackNowMs: number): number {
+  const raw = settings.queue_epoch_at
+  if (!raw) return fallbackNowMs
+  const parsed = new Date(raw).getTime()
+  return Number.isFinite(parsed) ? parsed : fallbackNowMs
+}
+
+// Mirrors src/lib/queue-epoch.ts wasFrontOfQueue (waiting-only front).
+function wasFrontOfQueue(party: Party, activeBeforeChange: Party[]): boolean {
+  const waiting = activeBeforeChange.filter(p => p.status === 'waiting')
+  if (waiting.length === 0) return false
+  const sorted = [...waiting].sort((a, b) => {
+    const byTime = a.checked_in_at.localeCompare(b.checked_in_at)
+    return byTime !== 0 ? byTime : a.id.localeCompare(b.id)
+  })
+  return sorted[0].id === party.id
+}
+
 function getEstimatedTeeTime(
   party: Party,
   allParties: Party[],
   smallRate: number,
-  largeRate: number
+  largeRate: number,
+  epochMs: number
 ): Date {
-  const active = allParties.filter(p => p.status === 'waiting' || p.status === 'notified')
-  const ahead = active.filter(p => p.checked_in_at < party.checked_in_at)
-  const earliest = active.reduce(
-    (min, p) => (p.checked_in_at < min ? p.checked_in_at : min),
-    active[0]?.checked_in_at ?? party.checked_in_at
-  )
-  const elapsedMinutes = (Date.now() - new Date(earliest).getTime()) / 60_000
+  // Only still-'waiting' parties consume a place in line; 'notified'
+  // parties have been told to come and no longer count (mirrors
+  // wait-time.ts queuedParties).
+  const queued = allParties.filter(p => p.status === 'waiting')
+  const ahead = queued.filter(p => p.checked_in_at < party.checked_in_at)
+  const elapsedMinutes = Math.max(0, (Date.now() - epochMs) / 60_000)
   const waitMinutes = Math.max(
     0,
     MINIMUM_WAIT_MINUTES + calculateWaitMinutes(ahead, smallRate, largeRate) - elapsedMinutes
@@ -119,9 +147,10 @@ Deno.serve(async () => {
   }
 
   const results: string[] = []
+  const epochMs = parseEpochMs(settings, Date.now())
 
   for (const party of parties) {
-    const estimatedTeeTime = getEstimatedTeeTime(party, parties, smallRate, largeRate)
+    const estimatedTeeTime = getEstimatedTeeTime(party, parties, smallRate, largeRate, epochMs)
     const minutesUntilTee = (estimatedTeeTime.getTime() - now.getTime()) / 60_000
 
     if (party.status === 'waiting' && minutesUntilTee <= leadMinutes) {
@@ -140,6 +169,22 @@ Deno.serve(async () => {
         .from('parties')
         .update({ status: 'notified', notified_at: now.toISOString() })
         .eq('id', party.id)
+        .eq('status', 'waiting') // race guard, matches the app's notify route
+      // Flipping a party to 'notified' removes their rate from everyone
+      // else's math — the shared epoch must advance by their own rate when
+      // they were the front, exactly like POST /api/parties/[id]/notify,
+      // or every wait behind them jumps. Uses the same atomic RPC.
+      if (wasFrontOfQueue(party, parties)) {
+        const rate = party.party_size >= 5 ? largeRate : smallRate
+        const { error: epochError } = await supabase.rpc('advance_queue_epoch', {
+          delta_minutes: rate,
+        })
+        if (epochError) console.error(`advance_queue_epoch failed for ${party.id}:`, epochError)
+      }
+      // Keep the local snapshot honest so a later party notified in this
+      // same cron run sees this one as already-notified (front check +
+      // ahead-of-me math both depend on it).
+      party.status = 'notified'
       results.push(`notified:${party.id}`)
     }
 
