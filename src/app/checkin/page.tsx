@@ -1,5 +1,5 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import Image from 'next/image'
 import CheckinWizard from '@/components/checkin/CheckinWizard'
 import QueueView from '@/components/checkin/QueueView'
@@ -13,8 +13,17 @@ export default function CheckinPage() {
   const [subtractTimeFlash, setSubtractTimeFlash] = useState('')
   const [confirmingSubtractTime, setConfirmingSubtractTime] = useState(false)
   const refresh = useCallback(() => setRefreshKey(k => k + 1), [])
+  // Synchronous re-entrancy guards. State (`addingTime`) and the `disabled`
+  // attribute only take effect after React re-renders — two click events
+  // dispatched in the same tick (iPad double-tap / ghost click) both see the
+  // stale pre-click render, so a ref is required to actually block the second
+  // call. Prod bug 2026-07-18: one tap fired two POSTs → +10 instead of +5.
+  const addTimeBusy = useRef(false)
+  const subtractTimeBusy = useRef(false)
 
   async function addTime() {
+    if (addingTime || addTimeBusy.current) return
+    addTimeBusy.current = true
     setConfirmingAddTime(false)
     setAddingTime(true)
     try {
@@ -28,11 +37,14 @@ export default function CheckinPage() {
     } catch {
       setAddTimeFlash('Network error')
     }
+    addTimeBusy.current = false
     setAddingTime(false)
     setTimeout(() => setAddTimeFlash(''), 2500)
   }
 
   async function subtractTime() {
+    if (subtractingTime || subtractTimeBusy.current) return
+    subtractTimeBusy.current = true
     setConfirmingSubtractTime(false)
     setSubtractingTime(true)
     try {
@@ -47,6 +59,7 @@ export default function CheckinPage() {
     } catch {
       setSubtractTimeFlash('Network error')
     }
+    subtractTimeBusy.current = false
     setSubtractingTime(false)
     setTimeout(() => setSubtractTimeFlash(''), 2500)
   }
@@ -93,8 +106,9 @@ export default function CheckinPage() {
               </button>
               <button
                 onClick={addTime}
+                disabled={addingTime}
                 className="flex-1 bg-red-500 text-white font-bold py-3 rounded-xl
-                           transition-all duration-150 hover:bg-red-600 active:scale-[0.97]"
+                           transition-all duration-150 hover:bg-red-600 active:scale-[0.97] disabled:opacity-50"
               >
                 Yes
               </button>
@@ -117,8 +131,9 @@ export default function CheckinPage() {
               </button>
               <button
                 onClick={subtractTime}
+                disabled={subtractingTime}
                 className="flex-1 bg-rc-green text-white font-bold py-3 rounded-xl
-                           transition-all duration-150 hover:brightness-95 active:scale-[0.97]"
+                           transition-all duration-150 hover:brightness-95 active:scale-[0.97] disabled:opacity-50"
               >
                 Yes
               </button>
