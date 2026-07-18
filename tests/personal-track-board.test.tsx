@@ -115,6 +115,76 @@ describe('PersonalTrackBoard', () => {
     expect(screen.getByText('~10 min')).toBeInTheDocument()
   })
 
+  it('does not show the ready button when wait is 0 but this guest is not first in line', async () => {
+    const now = Date.now()
+    // Both parties are far enough past the shared queue clock that self's own
+    // wait computes to <= 0 — but self is still position 2 behind front.
+    const front = {
+      id: 'front-id',
+      first_name: 'Fran',
+      last_initial: 'T',
+      party_size: 2,
+      phone: null,
+      checked_in_at: new Date(now - 20 * 60_000).toISOString(),
+      status: 'waiting',
+    }
+    const self = {
+      id: 'self-id',
+      first_name: 'Sam',
+      last_initial: 'B',
+      party_size: 2,
+      phone: null,
+      checked_in_at: new Date(now - 19 * 60_000).toISOString(),
+      status: 'waiting',
+    }
+    global.fetch = vi.fn((url: string) => {
+      const u = url.toString()
+      if (u.endsWith('/api/parties/self-id')) return Promise.resolve({ ok: true, json: async () => self })
+      if (u.includes('/api/parties')) return Promise.resolve({ ok: true, json: async () => [front, self] })
+      if (u.includes('/api/settings')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ avg_min_per_hole_small: '5', avg_min_per_hole_large: '7' }),
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    }) as unknown as typeof fetch
+
+    render(<PersonalTrackBoard id="self-id" />)
+    await screen.findByText(/Position/i)
+    expect(screen.queryByText(/grab your putters/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/ready for the course/i)).not.toBeInTheDocument()
+  })
+
+  it('still shows the ready button when wait is 0 and this guest really is first in line', async () => {
+    const now = Date.now()
+    const self = {
+      id: 'self-id',
+      first_name: 'Sam',
+      last_initial: 'B',
+      party_size: 2,
+      phone: null,
+      checked_in_at: new Date(now - 20 * 60_000).toISOString(),
+      status: 'waiting',
+    }
+    global.fetch = vi.fn((url: string) => {
+      const u = url.toString()
+      if (u.endsWith('/api/parties/self-id')) return Promise.resolve({ ok: true, json: async () => self })
+      if (u.includes('/api/parties')) return Promise.resolve({ ok: true, json: async () => [self] })
+      if (u.includes('/api/settings')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ avg_min_per_hole_small: '5', avg_min_per_hole_large: '7' }),
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    }) as unknown as typeof fetch
+
+    render(<PersonalTrackBoard id="self-id" />)
+    await screen.findByText(/grab your putters/i)
+    expect(screen.getByText(/ready for the course/i)).toBeInTheDocument()
+  })
+
   it('requires a second tap before calling the ready endpoint', async () => {
     render(<PersonalTrackBoard id="first" />)
     await waitFor(() => screen.getByRole('button', { name: /ready for the course/i }))

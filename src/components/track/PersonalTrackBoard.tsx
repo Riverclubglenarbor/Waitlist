@@ -128,7 +128,7 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
       style={{ backgroundColor: themeColor }}
     >
       <p className="text-white/70 text-lg uppercase tracking-widest">{party.first_name} {party.last_initial}.</p>
-      {wait <= 0 ? (
+      {wait <= 0 && position === 1 ? (
         <>
           <p key="ready-headline" className="text-white text-3xl font-black max-w-xs animate-pop-in">Grab your putters, hole 1 is ready!</p>
           <button
