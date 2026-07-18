@@ -58,6 +58,34 @@ describe('TrackBoard', () => {
     expect(screen.getByText('15m')).toBeInTheDocument()
   })
 
+  it('shows "Now!" only for the front party when a stale epoch clamps every wait to 0', async () => {
+    // Prod bug 2026-07-18 (same class as the QueueView incident): the queue
+    // epoch had gone stale, so every party's clamped wait hit 0 at once and
+    // the customer-facing board flashed "Now!" on every row. Only the front
+    // of the waiting line may show "Now!" — everyone behind shows "0m".
+    const staleEpoch = new Date(Date.now() - 30 * 60_000).toISOString()
+    global.fetch = vi.fn((url: string) => {
+      if (url.toString().includes('/api/parties')) {
+        return Promise.resolve({ json: async () => parties, ok: true })
+      }
+      if (url.toString().includes('/api/settings')) {
+        return Promise.resolve({
+          json: async () => ({
+            avg_min_per_hole_small: '5',
+            avg_min_per_hole_large: '7',
+            queue_epoch_at: staleEpoch,
+          }),
+          ok: true,
+        })
+      }
+      return Promise.resolve({ json: async () => ({}), ok: true })
+    }) as unknown as typeof fetch
+    render(<TrackBoard />)
+    await waitFor(() => screen.getByText('Sarah D.'))
+    expect(screen.getAllByText('Now!')).toHaveLength(1)
+    expect(screen.getByText('0m')).toBeInTheDocument()
+  })
+
   it('shows an empty-queue message when there are no parties', async () => {
     global.fetch = vi.fn((url: string) => {
       if (url.toString().includes('/api/parties')) {

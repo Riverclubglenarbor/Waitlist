@@ -11,7 +11,13 @@ interface QueueViewProps {
   refreshKey?: number
 }
 
-// Only ever called with remainingSec > 0 — anything <= 0 renders "Now! ⛳" instead.
+// Called with remainingSec > 0 for the front-of-line party (anything <= 0
+// there renders "Now! ⛳" instead), and with any non-negative value
+// (already clamped by the caller) for every other party — a party behind
+// the front can be running behind schedule (raw wait went negative) without
+// it actually being their turn, so they get "0m" here, never "Now!".
+// Prod bug 2026-07-18: every party's raw wait crossing zero together (stale
+// queue epoch + a rate drop) showed "Now! ⛳" on the whole board at once.
 function formatCountdown(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60)
   return `${m}m`
@@ -194,14 +200,14 @@ export default function QueueView({ refreshKey }: QueueViewProps) {
                   Time Till Tee Off
                 </p>
                 <div className="font-mono font-bold text-lg">
-                  {remainingSec <= 0
+                  {remainingSec <= 0 && isFront
                     ? (
                       <span className={`animate-pulse font-sans
                         ${isCritical ? 'text-red-500' : isOverdue ? 'text-amber-500' : 'text-rc-green'}`}>
                         Now! ⛳
                       </span>
                     )
-                    : <span className="text-rc-navy">{formatCountdown(remainingSec)}</span>
+                    : <span className="text-rc-navy">{formatCountdown(Math.max(0, remainingSec))}</span>
                   }
                 </div>
               </div>

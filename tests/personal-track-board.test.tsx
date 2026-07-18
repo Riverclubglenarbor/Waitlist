@@ -342,6 +342,130 @@ describe('PersonalTrackBoard', () => {
     expect(meta!.getAttribute('content')).toBe('#1E3A5F')
   })
 
+  it('shows the "Running behind?" link for a waiting guest who still has time on the clock', async () => {
+    render(<PersonalTrackBoard id="second" />)
+    await waitFor(() => screen.getByText('#2'))
+    expect(screen.getByRole('button', { name: /running behind/i })).toBeInTheDocument()
+  })
+
+  it('does not show the "Running behind?" link on the ready screen', async () => {
+    render(<PersonalTrackBoard id="first" />)
+    await waitFor(() => screen.getByText(/grab your putters/i))
+    expect(screen.queryByRole('button', { name: /running behind/i })).not.toBeInTheDocument()
+  })
+
+  it('opens the confirm popup with the exact required copy, and No closes it without calling the API', async () => {
+    // Pre-store the sound preference so its Yes/No buttons are not on screen.
+    window.localStorage.setItem('river-club-ready-alert:second', 'no')
+    render(<PersonalTrackBoard id="second" />)
+    await waitFor(() => screen.getByText('#2'))
+
+    fireEvent.click(screen.getByRole('button', { name: /running behind/i }))
+    expect(screen.getByText('Would you like to move down 1 spot on the waitlist?')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /^no$/i }))
+    expect(screen.queryByText('Would you like to move down 1 spot on the waitlist?')).not.toBeInTheDocument()
+    const swapCalls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.filter(
+      c => c[0].toString().includes('/swap-down')
+    )
+    expect(swapCalls.length).toBe(0)
+  })
+
+  it('Yes in the popup POSTs to the swap-down endpoint', async () => {
+    window.localStorage.setItem('river-club-ready-alert:second', 'no')
+    render(<PersonalTrackBoard id="second" />)
+    await waitFor(() => screen.getByText('#2'))
+
+    fireEvent.click(screen.getByRole('button', { name: /running behind/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^yes$/i }))
+
+    await waitFor(() => {
+      const swapCalls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.filter(
+        c => c[0].toString().includes('/api/parties/second/swap-down')
+      )
+      expect(swapCalls.length).toBe(1)
+      expect(swapCalls[0][1]?.method).toBe('POST')
+    })
+    expect(screen.queryByText('Would you like to move down 1 spot on the waitlist?')).not.toBeInTheDocument()
+  })
+
+  it('surfaces the API error message when the swap is rejected', async () => {
+    window.localStorage.setItem('river-club-ready-alert:second', 'no')
+    const baseFetch = global.fetch
+    global.fetch = vi.fn((url: string, init?: RequestInit) => {
+      if (url.toString().includes('/swap-down')) {
+        return Promise.resolve({ ok: false, status: 409, json: async () => ({ error: 'No one behind you to swap with' }) })
+      }
+      return baseFetch(url, init)
+    }) as unknown as typeof fetch
+
+    render(<PersonalTrackBoard id="second" />)
+    await waitFor(() => screen.getByText('#2'))
+    fireEvent.click(screen.getByRole('button', { name: /running behind/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^yes$/i }))
+    await waitFor(() => screen.getByText(/no one behind you to swap with/i))
+  })
+
+  function mockMovedUpFetch(movedUpAt: string | null) {
+    const me = {
+      id: 'me',
+      first_name: 'Wes',
+      last_initial: 'K',
+      party_size: 2,
+      phone: null,
+      checked_in_at: new Date(Date.now() - 60_000).toISOString(),
+      status: 'waiting',
+      ...(movedUpAt ? { moved_up_notice_at: movedUpAt } : {}),
+    }
+    global.fetch = vi.fn((url: string) => {
+      const u = url.toString()
+      if (u.endsWith('/api/parties/me')) return Promise.resolve({ ok: true, json: async () => me })
+      if (u.includes('/api/parties')) return Promise.resolve({ ok: true, json: async () => [me] })
+      if (u.includes('/api/settings')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            avg_min_per_hole_small: '5',
+            avg_min_per_hole_large: '7',
+            queue_epoch_at: me.checked_in_at,
+          }),
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    }) as unknown as typeof fetch
+  }
+
+  it('shows the "You got moved up!" banner once for a new moved_up_notice_at and not again for the same value', async () => {
+    const t1 = new Date().toISOString()
+    mockMovedUpFetch(t1)
+    const { unmount } = render(<PersonalTrackBoard id="me" />)
+    await screen.findByText(/you got moved up!/i)
+    expect(window.localStorage.getItem('river-club-moved-up-shown:me')).toBe(t1)
+    unmount()
+
+    // Same value on a later poll/visit: already shown, must not reappear.
+    mockMovedUpFetch(t1)
+    render(<PersonalTrackBoard id="me" />)
+    await screen.findByText('#1')
+    expect(screen.queryByText(/you got moved up!/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the banner again when a later swap produces a different moved_up_notice_at value', async () => {
+    window.localStorage.setItem('river-club-moved-up-shown:me', new Date(Date.now() - 60_000).toISOString())
+    const t2 = new Date().toISOString()
+    mockMovedUpFetch(t2)
+    render(<PersonalTrackBoard id="me" />)
+    await screen.findByText(/you got moved up!/i)
+    expect(window.localStorage.getItem('river-club-moved-up-shown:me')).toBe(t2)
+  })
+
+  it('never shows the banner for a party with no moved_up_notice_at', async () => {
+    mockMovedUpFetch(null)
+    render(<PersonalTrackBoard id="me" />)
+    await screen.findByText('#1')
+    expect(screen.queryByText(/you got moved up!/i)).not.toBeInTheDocument()
+  })
+
   it('shows a network error and resets the confirm state when the ready call rejects', async () => {
     render(<PersonalTrackBoard id="first" />)
     await waitFor(() => screen.getByRole('button', { name: /ready for the course/i }))

@@ -70,4 +70,46 @@ describe('WaitlistBoard hero number', () => {
     // 10 + 5 + 5 = 20 — a hypothetical next arrival's wait, not any real guest's.
     expect(screen.getByTestId('hero-wait')).toHaveTextContent('15')
   })
+
+  it('shows "Now!" only for the front party when a stale epoch clamps every wait to 0', async () => {
+    // Prod bug 2026-07-18 (same class as the QueueView incident): the queue
+    // epoch had gone stale, so every party's clamped wait hit 0 at once and
+    // the lobby board flashed "Now!" on every row. Only the front of the
+    // waiting line may show "Now!" — everyone behind shows "0m".
+    const now = Date.now()
+    const staleEpoch = new Date(now - 30 * 60_000).toISOString()
+    mockPartiesAndSettings(
+      [
+        {
+          id: 'a',
+          first_name: 'Sarah',
+          last_initial: 'D',
+          party_size: 2,
+          phone: null,
+          paid: false,
+          checked_in_at: new Date(now - 60_000).toISOString(),
+          status: 'waiting',
+        },
+        {
+          id: 'b',
+          first_name: 'Mike',
+          last_initial: 'T',
+          party_size: 2,
+          phone: null,
+          paid: false,
+          checked_in_at: new Date(now).toISOString(),
+          status: 'waiting',
+        },
+      ],
+      {
+        avg_min_per_hole_small: '5',
+        avg_min_per_hole_large: '7',
+        queue_epoch_at: staleEpoch,
+      }
+    )
+    render(<WaitlistBoard />)
+    await screen.findByText('Mike T.')
+    expect(screen.getAllByText('Now!')).toHaveLength(1)
+    expect(screen.getByText('0m')).toBeInTheDocument()
+  })
 })

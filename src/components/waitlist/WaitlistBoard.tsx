@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { getWaitMinutesForParty } from '@/lib/wait-time'
+import { getWaitMinutesForParty, getPartyPosition } from '@/lib/wait-time'
 import { parseEpochMs } from '@/lib/queue-epoch'
 import EmptyBoard from './EmptyBoard'
 import OdometerNumber from './OdometerNumber'
@@ -105,7 +105,12 @@ export default function WaitlistBoard() {
                 <span className="text-right text-3xl font-bold">
                   {party.status === 'notified' ? (
                     <span className="text-rc-green animate-pulse text-2xl">Come in!</span>
-                  ) : wait === 0 ? (
+                  ) : wait === 0 && getPartyPosition(party, parties) === 1 ? (
+                    // "Now!" is front-of-line only — same guard as QueueView.
+                    // Prod bug 2026-07-18: a stale queue epoch + a Speed Up
+                    // rate drop clamped EVERY party's wait to 0 at once, and
+                    // the whole board flashed "Now!" — parties behind the
+                    // front show "0m" instead until it's actually their turn.
                     <span className="text-rc-green animate-pulse">Now!</span>
                   ) : (
                     <span className="text-white/80">{wait}m</span>

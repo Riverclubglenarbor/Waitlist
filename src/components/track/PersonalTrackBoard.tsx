@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getPartyPosition, getWaitMinutesForParty } from '@/lib/wait-time'
 import { parseEpochMs } from '@/lib/queue-epoch'
@@ -16,6 +16,15 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
   const [confirming, setConfirming] = useState(false)
   const [readyError, setReadyError] = useState('')
   const [done, setDone] = useState(false)
+  const [confirmingMoveDown, setConfirmingMoveDown] = useState(false)
+  const [moveDownError, setMoveDownError] = useState('')
+  const [showMovedUp, setShowMovedUp] = useState(false)
+  const [swappingDown, setSwappingDown] = useState(false)
+  // Synchronous re-entrancy guard, same pattern as checkin/page.tsx's
+  // addTimeBusy/subtractTimeBusy — `swappingDown` alone only blocks after a
+  // re-render, so two taps in the same event tick would both slip through
+  // and double-swap this guest two spots instead of one.
+  const swapDownBusy = useRef(false)
 
   const fetchAll = useCallback(async () => {
     try {
@@ -52,6 +61,43 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
     const poll = setInterval(() => fetchAll(), 3000)
     return () => { supabase.removeChannel(channel); clearInterval(poll) }
   }, [fetchAll])
+
+  // One-time "You got moved up!" notice: shown once per distinct
+  // moved_up_notice_at value (the swap-down route stamps a fresh timestamp
+  // on the beneficiary each time), tracked in localStorage the same way
+  // use-ready-alert.ts stores the sound preference, so it never reappears
+  // on subsequent polls with the same value — but a later swap's new value
+  // shows it again.
+  const movedUpAt = self?.moved_up_notice_at
+  useEffect(() => {
+    if (!movedUpAt) return
+    const key = `river-club-moved-up-shown:${id}`
+    if (window.localStorage.getItem(key) === movedUpAt) return
+    window.localStorage.setItem(key, movedUpAt)
+    setShowMovedUp(true)
+    const timer = setTimeout(() => setShowMovedUp(false), 6000)
+    return () => clearTimeout(timer)
+  }, [movedUpAt, id])
+
+  async function handleMoveDownYes() {
+    if (swappingDown || swapDownBusy.current) return
+    swapDownBusy.current = true
+    setConfirmingMoveDown(false)
+    setMoveDownError('')
+    setSwappingDown(true)
+    try {
+      const res = await fetch(`/api/parties/${id}/swap-down`, { method: 'POST' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setMoveDownError(data.error ?? 'Something went wrong')
+      }
+      await fetchAll()
+    } catch {
+      setMoveDownError('Network error — check connection')
+    }
+    swapDownBusy.current = false
+    setSwappingDown(false)
+  }
 
   async function handleReady() {
     if (!confirming) {
@@ -166,6 +212,14 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
           </div>
         </div>
       )}
+      {showMovedUp && (
+        <button
+          onClick={() => setShowMovedUp(false)}
+          className="bg-white text-rc-navy text-lg font-black px-6 py-3 rounded-2xl shadow-lg animate-pop-in"
+        >
+          You got moved up! 🎉
+        </button>
+      )}
       <p className="text-white/70 text-lg uppercase tracking-widest">{party.first_name} {party.last_initial}.</p>
       {isReady ? (
         <>
@@ -184,7 +238,39 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
           <p className="text-white/60 text-xl uppercase tracking-widest">Position</p>
           <p key={position} className="text-white text-6xl font-black animate-pop-in motion-reduce:animate-none">#{position}</p>
           <p className="text-white/80 text-2xl font-bold">~{wait} min</p>
+          {party.status === 'waiting' && wait > 0 && (
+            <button
+              onClick={() => { setMoveDownError(''); setConfirmingMoveDown(true) }}
+              className="text-white/70 text-sm underline underline-offset-4 mt-2"
+            >
+              Running behind? Move down 1 spot
+            </button>
+          )}
+          {moveDownError && <p className="text-white text-sm">{moveDownError}</p>}
         </>
+      )}
+      {confirmingMoveDown && (
+        <div className="fixed inset-0 bg-black/60 z-20 flex items-center justify-center px-6">
+          <div className="bg-white text-rc-navy rounded-2xl p-6 flex flex-col items-center gap-4 w-full max-w-sm shadow-xl animate-pop-in">
+            <p className="text-lg font-semibold text-center">Would you like to move down 1 spot on the waitlist?</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmingMoveDown(false)}
+                disabled={swappingDown}
+                className="border border-slate-300 text-slate-600 font-bold px-6 py-2 rounded-xl disabled:opacity-50"
+              >
+                No
+              </button>
+              <button
+                onClick={handleMoveDownYes}
+                disabled={swappingDown}
+                className="bg-rc-green text-white font-bold px-6 py-2 rounded-xl disabled:opacity-50"
+              >
+                {swappingDown ? '…' : 'Yes'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
