@@ -50,27 +50,40 @@ describe('calculateWaitMinutes', () => {
 
 describe('getQueueWaitMinutes', () => {
   it('is just the 10-min base when no active parties are queued', () => {
+    const now = Date.now()
     const parties = [
       makeParty({ status: 'playing' }),
       makeParty({ status: 'removed' }),
     ]
-    expect(getQueueWaitMinutes(parties, 5, 7)).toBe(10)
+    expect(getQueueWaitMinutes(parties, 5, 7, now, now)).toBe(10)
   })
 
-  it('adds the 10-min base to the flat per-group total, counting only waiting/notified', () => {
+  it('adds the 10-min base to the flat per-group total, counting only still-waiting parties', () => {
     const now = Date.now()
     const parties = [
       makeParty({ party_size: 2, status: 'waiting', checked_in_at: new Date(now).toISOString() }),
+      // notified parties have been told to come — their rate no longer
+      // counts toward anyone's estimate (Notify Now design)
       makeParty({ party_size: 2, status: 'notified', checked_in_at: new Date(now).toISOString() }),
       makeParty({ party_size: 2, status: 'playing', checked_in_at: new Date(now).toISOString() }),
     ]
-    expect(getQueueWaitMinutes(parties, 5, 7, now)).toBe(20)
+    expect(getQueueWaitMinutes(parties, 5, 7, now, now)).toBe(15)
   })
 
-  it('decays with real time since the queue\'s front checked in', () => {
+  it('decays with real time since the queue epoch', () => {
     const now = Date.now()
-    const parties = [makeParty({ party_size: 2, checked_in_at: new Date(now - 4 * 60_000).toISOString() })]
-    expect(getQueueWaitMinutes(parties, 5, 7, now)).toBe(11)
+    const epochMs = now - 4 * 60_000
+    const parties = [makeParty({ party_size: 2, checked_in_at: new Date(epochMs).toISOString() })]
+    expect(getQueueWaitMinutes(parties, 5, 7, epochMs, now)).toBe(11)
+  })
+
+  it('never treats a future epoch as negative elapsed time', () => {
+    const now = Date.now()
+    // Epoch can momentarily sit ahead of the wall clock right after a very
+    // fast dequeue — elapsed must clamp at 0, not go negative.
+    const epochMs = now + 3 * 60_000
+    const parties = [makeParty({ party_size: 2, checked_in_at: new Date(now).toISOString() })]
+    expect(getQueueWaitMinutes(parties, 5, 7, epochMs, now)).toBe(15)
   })
 })
 
@@ -95,10 +108,17 @@ describe('getPartyPosition', () => {
     expect(getPartyPosition(b, [b, a])).toBe(2)
   })
 
-  it('ignores parties that are not waiting or notified', () => {
+  it('ignores parties that are not waiting', () => {
     const playing = makeParty({ id: 'a', status: 'playing', checked_in_at: new Date(Date.now() - 2000).toISOString() })
     const waiting = makeParty({ id: 'b', status: 'waiting', checked_in_at: new Date(Date.now() - 1000).toISOString() })
     expect(getPartyPosition(waiting, [playing, waiting])).toBe(1)
+  })
+
+  it('no longer counts a notified party — whoever was #2 becomes #1', () => {
+    const notified = makeParty({ id: 'a', status: 'notified', checked_in_at: new Date(Date.now() - 2000).toISOString() })
+    const waiting = makeParty({ id: 'b', status: 'waiting', checked_in_at: new Date(Date.now() - 1000).toISOString() })
+    expect(getPartyPosition(waiting, [notified, waiting])).toBe(1)
+    expect(getPartyPosition(notified, [notified, waiting])).toBe(0)
   })
 })
 
@@ -106,41 +126,44 @@ describe('getWaitMinutesForParty — shared queue floor', () => {
   it('starts a lone first-in-line party at exactly 10 min', () => {
     const now = Date.now()
     const party = makeParty({ id: 'a', checked_in_at: new Date(now).toISOString() })
-    expect(getWaitMinutesForParty(party, [party], 5, 7, now)).toBe(10)
+    expect(getWaitMinutesForParty(party, [party], 5, 7, now, now)).toBe(10)
   })
 
   it('counts that 10 min down as real time passes, going below 10', () => {
     const now = Date.now()
-    const party = makeParty({ id: 'a', checked_in_at: new Date(now - 4 * 60_000).toISOString() })
-    expect(getWaitMinutesForParty(party, [party], 5, 7, now)).toBe(6)
+    const epochMs = now - 4 * 60_000
+    const party = makeParty({ id: 'a', checked_in_at: new Date(epochMs).toISOString() })
+    expect(getWaitMinutesForParty(party, [party], 5, 7, epochMs, now)).toBe(6)
   })
 
   it('clamps at 0 (ready) once the base and queue-ahead time have both elapsed', () => {
     const now = Date.now()
-    const party = makeParty({ id: 'a', checked_in_at: new Date(now - 11 * 60_000).toISOString() })
-    expect(getWaitMinutesForParty(party, [party], 5, 7, now)).toBe(0)
+    const epochMs = now - 11 * 60_000
+    const party = makeParty({ id: 'a', checked_in_at: new Date(epochMs).toISOString() })
+    expect(getWaitMinutesForParty(party, [party], 5, 7, epochMs, now)).toBe(0)
   })
 
   it('starts the second party (small group ahead) at 15 — base 10 + that group\'s rate', () => {
     const now = Date.now()
     const first = makeParty({ id: 'a', party_size: 2, checked_in_at: new Date(now).toISOString() })
     const second = makeParty({ id: 'b', party_size: 2, checked_in_at: new Date(now + 1000).toISOString() })
-    expect(getWaitMinutesForParty(second, [first, second], 5, 7, now)).toBe(15)
+    expect(getWaitMinutesForParty(second, [first, second], 5, 7, now, now)).toBe(15)
   })
 
   it('starts the second party at 17 when the group ahead of them is large', () => {
     const now = Date.now()
     const first = makeParty({ id: 'a', party_size: 6, checked_in_at: new Date(now).toISOString() })
     const second = makeParty({ id: 'b', party_size: 2, checked_in_at: new Date(now + 1000).toISOString() })
-    expect(getWaitMinutesForParty(second, [first, second], 5, 7, now)).toBe(17)
+    expect(getWaitMinutesForParty(second, [first, second], 5, 7, now, now)).toBe(17)
   })
 
   it('decays the first and second party together, in lockstep, off the same shared clock', () => {
     const now = Date.now()
-    const first = makeParty({ id: 'a', party_size: 2, checked_in_at: new Date(now - 4 * 60_000).toISOString() })
-    const second = makeParty({ id: 'b', party_size: 2, checked_in_at: new Date(now - 4 * 60_000 + 1000).toISOString() })
-    expect(getWaitMinutesForParty(first, [first, second], 5, 7, now)).toBe(6)
-    expect(getWaitMinutesForParty(second, [first, second], 5, 7, now)).toBe(11)
+    const epochMs = now - 4 * 60_000
+    const first = makeParty({ id: 'a', party_size: 2, checked_in_at: new Date(epochMs).toISOString() })
+    const second = makeParty({ id: 'b', party_size: 2, checked_in_at: new Date(epochMs + 1000).toISOString() })
+    expect(getWaitMinutesForParty(first, [first, second], 5, 7, epochMs, now)).toBe(6)
+    expect(getWaitMinutesForParty(second, [first, second], 5, 7, epochMs, now)).toBe(11)
   })
 
   it('raising the rate via Add Time raises everyone queued behind it', () => {
@@ -148,8 +171,8 @@ describe('getWaitMinutesForParty — shared queue floor', () => {
     const first = makeParty({ id: 'a', party_size: 2, checked_in_at: new Date(now).toISOString() })
     const second = makeParty({ id: 'b', party_size: 2, checked_in_at: new Date(now + 1000).toISOString() })
     // Before Add Time: 15. After one +5 click on the small rate (5 -> 10): 20.
-    expect(getWaitMinutesForParty(second, [first, second], 5, 7, now)).toBe(15)
-    expect(getWaitMinutesForParty(second, [first, second], 10, 7, now)).toBe(20)
+    expect(getWaitMinutesForParty(second, [first, second], 5, 7, now, now)).toBe(15)
+    expect(getWaitMinutesForParty(second, [first, second], 10, 7, now, now)).toBe(20)
   })
 
   it('compounds the Add Time bump for parties with multiple groups ahead of them', () => {
@@ -159,27 +182,26 @@ describe('getWaitMinutesForParty — shared queue floor', () => {
     const third = makeParty({ id: 'c', party_size: 2, checked_in_at: new Date(now + 2000).toISOString() })
     const all = [first, second, third]
     // Before: 10 + 5 + 7 = 22. After +5 on both rates: 10 + 10 + 12 = 32 (+10, not +5).
-    expect(getWaitMinutesForParty(third, all, 5, 7, now)).toBe(22)
-    expect(getWaitMinutesForParty(third, all, 10, 12, now)).toBe(32)
+    expect(getWaitMinutesForParty(third, all, 5, 7, now, now)).toBe(22)
+    expect(getWaitMinutesForParty(third, all, 10, 12, now, now)).toBe(32)
   })
 
-  it('checking someone in early pulls everyone behind them forward too — it works both ways', () => {
+  // The old "checking someone in early pulls everyone behind them forward"
+  // test that used to live here asserted the implicit re-anchoring behavior
+  // this plan removed (the root cause of the wait-time jump bug). That
+  // scenario is now covered by tests/queue-epoch-server.test.ts, which tests
+  // the epoch-advance behavior that replaces it.
+
+  it('a notified party mid-queue no longer counts toward the wait of parties behind them', () => {
     const now = Date.now()
     const first = makeParty({ id: 'a', party_size: 2, checked_in_at: new Date(now).toISOString() })
-    const second = makeParty({ id: 'b', party_size: 2, checked_in_at: new Date(now + 60_000).toISOString() })
-    const third = makeParty({ id: 'c', party_size: 2, checked_in_at: new Date(now + 2 * 60_000).toISOString() })
-    const twoMinLater = now + 2 * 60_000
-
-    // Normal decay 2 min after first checked in, all three still queued.
-    expect(getWaitMinutesForParty(second, [first, second, third], 5, 7, twoMinLater)).toBe(13)
-    expect(getWaitMinutesForParty(third, [first, second, third], 5, 7, twoMinLater)).toBe(18)
-
-    // Staff check first in early (ahead of their own floor expiring) — second
-    // becomes the new front and inherits a fresh floor off their own
-    // check-in time; third drops by first's whole rate contribution.
-    const firstPlayed = { ...first, status: 'playing' as const }
-    const activeNow = [firstPlayed, second, third]
-    expect(getWaitMinutesForParty(second, activeNow, 5, 7, twoMinLater)).toBe(9)
-    expect(getWaitMinutesForParty(third, activeNow, 5, 7, twoMinLater)).toBe(14)
+    const second = makeParty({ id: 'b', party_size: 6, status: 'notified', checked_in_at: new Date(now + 1000).toISOString() })
+    const third = makeParty({ id: 'c', party_size: 2, checked_in_at: new Date(now + 2000).toISOString() })
+    const all = [first, second, third]
+    // third only pays for first's rate (5), not the notified large group's 7.
+    expect(getWaitMinutesForParty(third, all, 5, 7, now, now)).toBe(15)
+    // ...but the notified party still gets its own wait computed (it is
+    // still on every board — only removal/checkin takes it off entirely).
+    expect(getWaitMinutesForParty(second, all, 5, 7, now, now)).toBe(15)
   })
 })
