@@ -3,6 +3,7 @@ import { createServerClient } from '@/lib/supabase-server'
 import { sendSms } from '@/lib/twilio'
 import { interpolate } from '@/lib/sms-templates'
 import { getQueueWaitMinutes } from '@/lib/wait-time'
+import { parseEpochMs, QUEUE_EPOCH_SETTINGS_KEY } from '@/lib/queue-epoch'
 import type { Party, Settings } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -43,7 +44,20 @@ export async function POST(request: Request) {
   const smallRate = parseFloat(settings.avg_min_per_hole_small ?? settings.avg_min_per_hole ?? '4')
   const largeRate = parseFloat(settings.avg_min_per_hole_large ?? settings.avg_min_per_hole ?? '5')
   const allActive: Party[] = activeParties ?? []
-  const waitMinutes = Math.round(getQueueWaitMinutes(allActive, smallRate, largeRate))
+
+  // Empty -> non-empty transition starts a fresh queue clock: the shared
+  // 10-minute floor for this new queue begins now. (Every later epoch
+  // change goes through the atomic advance_queue_epoch RPC instead.)
+  let epochMs: number
+  if (allActive.length === 0) {
+    const nowIso = new Date().toISOString()
+    await supabase.from('settings').upsert([{ key: QUEUE_EPOCH_SETTINGS_KEY, value: nowIso }])
+    epochMs = new Date(nowIso).getTime()
+  } else {
+    epochMs = parseEpochMs(settings, Date.now())
+  }
+
+  const waitMinutes = Math.round(getQueueWaitMinutes(allActive, smallRate, largeRate, epochMs))
 
   // Split party into groups of MAX_GROUP_SIZE
   const groups: { size: number; label: string }[] = []
