@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { getPartyPosition, getWaitMinutesForParty } from '@/lib/wait-time'
 import { parseEpochMs } from '@/lib/queue-epoch'
 import { buzzerColor, NAVY, GREEN } from '@/lib/buzzer-color'
+import { useReadyAlert } from '@/lib/use-ready-alert'
 import type { Party } from '@/types'
 
 export default function PersonalTrackBoard({ id }: { id: string }) {
@@ -99,6 +100,24 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
     meta.setAttribute('content', themeColor)
   }, [themeColor])
 
+  // Ready computation is hoisted above the early returns below so
+  // useReadyAlert can be called unconditionally on every render (rules of
+  // hooks — the early returns must not change the hook count between
+  // renders). trackedParty is only non-null in the normal "still in line"
+  // state that renders the board.
+  const trackedParty = self && !isPlaying && !isGone ? self : null
+  const position = trackedParty ? getPartyPosition(trackedParty, parties) : 0
+  const wait = trackedParty
+    ? Math.round(getWaitMinutesForParty(trackedParty, parties, smallRate, largeRate, epochMs))
+    : 0
+  // A notified party has been called up — that IS "your turn", regardless
+  // of the numeric position (which no longer counts notified parties).
+  // This MUST stay identical to the ready-screen condition in the JSX
+  // below, so the chime fires at the same moment the screen flips.
+  const isReady = trackedParty !== null
+    && ((wait <= 0 && position === 1) || trackedParty.status === 'notified')
+  const { showPrompt, choose } = useReadyAlert(id, isReady)
+
   // Wait for the initial per-id fetch before deciding which state to render,
   // so we don't briefly flash the "expired" state before data arrives.
   if (self === undefined) {
@@ -122,17 +141,31 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
   }
 
   const party = self
-  const position = getPartyPosition(party, parties)
-  const wait = Math.round(getWaitMinutesForParty(party, parties, smallRate, largeRate, epochMs))
-  // A notified party has been called up — that IS "your turn", regardless
-  // of the numeric position (which no longer counts notified parties).
-  const isReady = (wait <= 0 && position === 1) || party.status === 'notified'
 
   return (
     <div
       className="fixed inset-0 flex flex-col items-center justify-center px-6 text-center gap-4 transition-colors duration-[600ms] ease-out motion-reduce:transition-none"
       style={{ backgroundColor: themeColor }}
     >
+      {showPrompt && (
+        <div className="fixed top-0 inset-x-0 bg-white text-rc-navy px-6 py-4 flex flex-col items-center gap-3 shadow-lg z-10 animate-pop-in">
+          <p className="text-base font-semibold text-center">Play a sound when it&apos;s your turn?</p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => choose('no')}
+              className="border border-slate-300 text-slate-600 font-bold px-6 py-2 rounded-xl"
+            >
+              No
+            </button>
+            <button
+              onClick={() => choose('yes')}
+              className="bg-rc-green text-white font-bold px-6 py-2 rounded-xl"
+            >
+              Yes
+            </button>
+          </div>
+        </div>
+      )}
       <p className="text-white/70 text-lg uppercase tracking-widest">{party.first_name} {party.last_initial}.</p>
       {isReady ? (
         <>

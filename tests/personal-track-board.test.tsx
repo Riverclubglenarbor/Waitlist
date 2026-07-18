@@ -76,6 +76,7 @@ function mockFetch(
 
 beforeEach(() => {
   vi.resetAllMocks()
+  window.localStorage.clear()
   mockFetch()
 })
 
@@ -243,6 +244,21 @@ describe('PersonalTrackBoard', () => {
     render(<PersonalTrackBoard id="self-id" />)
     await screen.findByText(/grab your putters/i)
     expect(screen.getByText(/ready for the course/i)).toBeInTheDocument()
+  })
+
+  it('shows the sound-alert prompt on first visit and hides it after a choice', async () => {
+    render(<PersonalTrackBoard id="second" />)
+    await screen.findByText(/play a sound when it's your turn/i)
+    fireEvent.click(screen.getByRole('button', { name: /^yes$/i }))
+    expect(screen.queryByText(/play a sound when it's your turn/i)).not.toBeInTheDocument()
+    expect(window.localStorage.getItem('river-club-ready-alert:second')).toBe('yes')
+  })
+
+  it('does not show the sound-alert prompt again when a choice was already stored for this party', async () => {
+    window.localStorage.setItem('river-club-ready-alert:second', 'no')
+    render(<PersonalTrackBoard id="second" />)
+    await waitFor(() => screen.getByText('#2'))
+    expect(screen.queryByText(/play a sound when it's your turn/i)).not.toBeInTheDocument()
   })
 
   it('requires a second tap before calling the ready endpoint', async () => {
