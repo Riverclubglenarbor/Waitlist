@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getWaitMinutesForParty } from '@/lib/wait-time'
+import { parseEpochMs } from '@/lib/queue-epoch'
 import EmptyBoard from './EmptyBoard'
 import OdometerNumber from './OdometerNumber'
 import Image from 'next/image'
@@ -23,6 +24,7 @@ export default function WaitlistBoard() {
   const [parties, setParties] = useState<Party[]>([])
   const [smallRate, setSmallRate] = useState(4)
   const [largeRate, setLargeRate] = useState(5)
+  const [epochMs, setEpochMs] = useState(() => Date.now())
 
   const fetchAll = useCallback(async () => {
     try {
@@ -36,6 +38,7 @@ export default function WaitlistBoard() {
       const fallback = parseFloat(settingsData.avg_min_per_hole ?? '4')
       setSmallRate(parseFloat(settingsData.avg_min_per_hole_small ?? String(fallback)))
       setLargeRate(parseFloat(settingsData.avg_min_per_hole_large ?? String(fallback + 1)))
+      setEpochMs(parseEpochMs(settingsData, Date.now()))
     } catch (e) {
       console.error('fetchAll failed', e)
     }
@@ -60,7 +63,7 @@ export default function WaitlistBoard() {
   // parties ordered by checked_in_at ascending, so the last element is the
   // newest active party.
   const lastParty = parties[parties.length - 1]
-  const totalWait = Math.round(getWaitMinutesForParty(lastParty, parties, smallRate, largeRate))
+  const totalWait = Math.round(getWaitMinutesForParty(lastParty, parties, smallRate, largeRate, epochMs))
 
   return (
     <div className="h-screen bg-rc-navy flex flex-col items-center px-8 py-10" style={{ fontFamily: 'var(--font-montserrat), sans-serif' }}>
@@ -88,7 +91,7 @@ export default function WaitlistBoard() {
 
         <div className="w-full flex flex-col gap-3 overflow-y-auto">
           {parties.slice(0, 10).map((party, i) => {
-            const wait = Math.round(getWaitMinutesForParty(party, parties, smallRate, largeRate))
+            const wait = Math.round(getWaitMinutesForParty(party, parties, smallRate, largeRate, epochMs))
 
             return (
               <div
@@ -100,7 +103,9 @@ export default function WaitlistBoard() {
                   {formatName(party.first_name, party.last_initial)}
                 </span>
                 <span className="text-right text-3xl font-bold">
-                  {wait === 0 ? (
+                  {party.status === 'notified' ? (
+                    <span className="text-rc-green animate-pulse text-2xl">Come in!</span>
+                  ) : wait === 0 ? (
                     <span className="text-rc-green animate-pulse">Now!</span>
                   ) : (
                     <span className="text-white/80">{wait}m</span>

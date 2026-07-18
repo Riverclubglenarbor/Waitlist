@@ -1,10 +1,11 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { getRawWaitMinutesForParty } from '@/lib/wait-time'
+import { getRawWaitMinutesForParty, getPartyPosition } from '@/lib/wait-time'
+import { parseEpochMs } from '@/lib/queue-epoch'
 import type { Party } from '@/types'
 
-type ActionState = { id: string; type: 'checkin' | 'resend' | 'paid' | 'remove' } | null
+type ActionState = { id: string; type: 'checkin' | 'resend' | 'paid' | 'remove' | 'notify' | 'undo-notify' } | null
 
 interface QueueViewProps {
   refreshKey?: number
@@ -20,24 +21,28 @@ export default function QueueView({ refreshKey }: QueueViewProps) {
   const [parties, setParties] = useState<Party[]>([])
   const [smallRate, setSmallRate] = useState(4)
   const [largeRate, setLargeRate] = useState(5)
+  const [epochMs, setEpochMs] = useState(() => Date.now())
   const [now, setNow] = useState(() => Date.now())
   const [loading, setLoading] = useState<ActionState>(null)
   const [flash, setFlash] = useState<{ id: string; type: 'success' | 'error'; msg: string } | null>(null)
   const autoResentRef = useRef<Set<string>>(new Set())
 
+  // Parties and settings refresh together on every poll — the queue epoch
+  // lives in settings and advances on server-side dequeue events, so a
+  // once-on-mount settings fetch would leave the countdowns lagging until
+  // a page reload.
   const fetchParties = useCallback(async () => {
-    const res = await fetch('/api/parties')
-    const data = await res.json()
+    const [partiesRes, settingsRes] = await Promise.all([
+      fetch('/api/parties'),
+      fetch('/api/settings'),
+    ])
+    const data = await partiesRes.json()
+    const s = await settingsRes.json()
     if (Array.isArray(data)) setParties(data)
-  }, [])
-
-  // Fetch settings once on mount
-  useEffect(() => {
-    fetch('/api/settings').then(r => r.json()).then(s => {
-      const fallback = parseFloat(s.avg_min_per_hole ?? '4')
-      setSmallRate(parseFloat(s.avg_min_per_hole_small ?? String(fallback)))
-      setLargeRate(parseFloat(s.avg_min_per_hole_large ?? String(fallback + 1)))
-    })
+    const fallback = parseFloat(s.avg_min_per_hole ?? '4')
+    setSmallRate(parseFloat(s.avg_min_per_hole_small ?? String(fallback)))
+    setLargeRate(parseFloat(s.avg_min_per_hole_large ?? String(fallback + 1)))
+    setEpochMs(parseEpochMs(s, Date.now()))
   }, [])
 
   useEffect(() => {
@@ -93,6 +98,24 @@ export default function QueueView({ refreshKey }: QueueViewProps) {
     showFlash(id, 'success', 'Auto-text sent!')
   }
 
+  async function notifyParty(id: string) {
+    setLoading({ id, type: 'notify' })
+    const res = await fetch(`/api/parties/${id}/notify`, { method: 'POST' })
+    setLoading(null)
+    if (res.ok) showFlash(id, 'success', 'Called up!')
+    else showFlash(id, 'error', 'Failed to notify')
+    fetchParties()
+  }
+
+  async function undoNotifyParty(id: string) {
+    setLoading({ id, type: 'undo-notify' })
+    const res = await fetch(`/api/parties/${id}/undo-notify`, { method: 'POST' })
+    setLoading(null)
+    if (res.ok) showFlash(id, 'success', 'Back in line')
+    else showFlash(id, 'error', 'Failed to undo')
+    fetchParties()
+  }
+
   async function togglePaid(id: string, paid: boolean) {
     setLoading({ id, type: 'paid' })
     await fetch(`/api/parties/${id}`, {
@@ -123,14 +146,19 @@ export default function QueueView({ refreshKey }: QueueViewProps) {
 
   return (
     <div className="flex flex-col gap-3">
-      {parties.map((party, i) => {
+      {parties.map(party => {
         const isLoading = loading?.id === party.id
         const partyFlash = flash?.id === party.id ? flash : null
         // Same shared formula the customer-facing pages use, so staff see
         // the identical number — just unclamped, so it can go negative to
         // drive the overdue/critical states below.
-        const rawWaitMinutes = getRawWaitMinutesForParty(party, parties, smallRate, largeRate, now)
+        const rawWaitMinutes = getRawWaitMinutesForParty(party, parties, smallRate, largeRate, epochMs, now)
         const remainingSec = Math.round(rawWaitMinutes * 60)
+        // Numeric position counts only still-waiting parties — a notified
+        // row keeps rendering (amber pill) but shows a bell, not a number.
+        const isNotified = party.status === 'notified'
+        const position = getPartyPosition(party, parties)
+        const isFront = position === 1
         const isOverdue = remainingSec < 0
         const isCritical = remainingSec <= -120 // -2 minutes
 
@@ -145,16 +173,18 @@ export default function QueueView({ refreshKey }: QueueViewProps) {
                 ? 'border-red-400 shadow-md shadow-red-100 bg-red-50'
                 : isOverdue
                   ? 'border-amber-400 shadow-sm'
-                  : i === 0
-                    ? 'border-rc-green shadow-md shadow-rc-green/10'
-                    : 'border-slate-200 shadow-sm'
+                  : isNotified
+                    ? 'border-amber-300 shadow-sm'
+                    : isFront
+                      ? 'border-rc-green shadow-md shadow-rc-green/10'
+                      : 'border-slate-200 shadow-sm'
               }`}
           >
             <div className="flex items-center gap-4 px-5 py-4">
-              {/* Position */}
+              {/* Position (notified parties no longer hold a numbered spot) */}
               <span className={`text-3xl font-black w-8 shrink-0
-                ${isCritical ? 'text-red-500' : i === 0 ? 'text-rc-green' : 'text-slate-300'}`}>
-                {i + 1}
+                ${isCritical ? 'text-red-500' : isFront ? 'text-rc-green' : 'text-slate-300'}`}>
+                {isNotified ? '🔔' : position}
               </span>
 
               {/* Info */}
@@ -198,6 +228,30 @@ export default function QueueView({ refreshKey }: QueueViewProps) {
 
               {/* Actions */}
               <div className="flex items-center gap-2 shrink-0">
+                {isFront && !isNotified && (
+                  <button
+                    onClick={() => notifyParty(party.id)}
+                    disabled={!!loading}
+                    className="flex items-center gap-1.5 bg-amber-400 text-white text-sm font-bold
+                               px-4 py-2 rounded-xl transition-all duration-150
+                               hover:bg-amber-500 active:scale-[0.97] disabled:opacity-40"
+                  >
+                    {isLoading && loading?.type === 'notify' ? '…' : '🔔 Notify'}
+                  </button>
+                )}
+
+                {isNotified && (
+                  <button
+                    onClick={() => undoNotifyParty(party.id)}
+                    disabled={!!loading}
+                    className="border border-amber-400 text-amber-600 text-sm font-semibold
+                               px-3 py-2 rounded-xl transition-all duration-150
+                               hover:bg-amber-50 active:scale-[0.97] disabled:opacity-40"
+                  >
+                    {isLoading && loading?.type === 'undo-notify' ? '…' : '↩ Undo Notify'}
+                  </button>
+                )}
+
                 <button
                   onClick={() => checkIn(party.id)}
                   disabled={!!loading}

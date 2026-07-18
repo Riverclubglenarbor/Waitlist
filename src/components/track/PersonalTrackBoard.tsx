@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getPartyPosition, getWaitMinutesForParty } from '@/lib/wait-time'
+import { parseEpochMs } from '@/lib/queue-epoch'
 import { buzzerColor, NAVY, GREEN } from '@/lib/buzzer-color'
 import type { Party } from '@/types'
 
@@ -10,6 +11,7 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
   const [self, setSelf] = useState<Party | null | undefined>(undefined)
   const [smallRate, setSmallRate] = useState(4)
   const [largeRate, setLargeRate] = useState(5)
+  const [epochMs, setEpochMs] = useState(() => Date.now())
   const [confirming, setConfirming] = useState(false)
   const [readyError, setReadyError] = useState('')
   const [done, setDone] = useState(false)
@@ -27,6 +29,7 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
       const fallback = parseFloat(settingsData.avg_min_per_hole ?? '4')
       setSmallRate(parseFloat(settingsData.avg_min_per_hole_small ?? String(fallback)))
       setLargeRate(parseFloat(settingsData.avg_min_per_hole_large ?? String(fallback + 1)))
+      setEpochMs(parseEpochMs(settingsData, Date.now()))
       if (selfRes.ok) {
         const selfData = await selfRes.json()
         setSelf(selfData)
@@ -120,7 +123,10 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
 
   const party = self
   const position = getPartyPosition(party, parties)
-  const wait = Math.round(getWaitMinutesForParty(party, parties, smallRate, largeRate))
+  const wait = Math.round(getWaitMinutesForParty(party, parties, smallRate, largeRate, epochMs))
+  // A notified party has been called up — that IS "your turn", regardless
+  // of the numeric position (which no longer counts notified parties).
+  const isReady = (wait <= 0 && position === 1) || party.status === 'notified'
 
   return (
     <div
@@ -128,7 +134,7 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
       style={{ backgroundColor: themeColor }}
     >
       <p className="text-white/70 text-lg uppercase tracking-widest">{party.first_name} {party.last_initial}.</p>
-      {wait <= 0 && position === 1 ? (
+      {isReady ? (
         <>
           <p key="ready-headline" className="text-white text-3xl font-black max-w-xs animate-pop-in">Grab your putters, hole 1 is ready!</p>
           <button

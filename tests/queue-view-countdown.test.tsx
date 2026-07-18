@@ -14,7 +14,7 @@ beforeEach(() => {
   vi.resetAllMocks()
 })
 
-function mockFetch(parties: unknown[]) {
+function mockFetch(parties: unknown[], settings: Record<string, string> = {}) {
   global.fetch = vi.fn((url: string) => {
     const u = url.toString()
     if (u.includes('/resend')) {
@@ -23,6 +23,9 @@ function mockFetch(parties: unknown[]) {
     if (u.includes('/api/parties')) {
       return Promise.resolve({ json: async () => parties, ok: true })
     }
+    if (u.includes('/api/settings')) {
+      return Promise.resolve({ json: async () => settings, ok: true })
+    }
     return Promise.resolve({ json: async () => ({}), ok: true })
   }) as unknown as typeof fetch
 }
@@ -30,8 +33,10 @@ function mockFetch(parties: unknown[]) {
 describe('QueueView countdown', () => {
   it('never shows a negative minute count for the first party in queue, no matter how long they have waited', async () => {
     // First party has zero wait-ahead, so their whole countdown is the
-    // shared 10-min floor. 20 minutes since check-in is well past that,
-    // so this should read as "ready now", not a literal negative number.
+    // shared 10-min floor. The queue epoch started 20 minutes ago, well
+    // past that, so this should read as "ready now", not a literal
+    // negative number.
+    const epoch = new Date(Date.now() - 20 * 60_000).toISOString()
     mockFetch([
       {
         id: '1',
@@ -40,10 +45,10 @@ describe('QueueView countdown', () => {
         party_size: 2,
         phone: null,
         paid: false,
-        checked_in_at: new Date(Date.now() - 20 * 60_000).toISOString(),
+        checked_in_at: epoch,
         status: 'waiting',
       },
-    ])
+    ], { queue_epoch_at: epoch })
     render(<QueueView />)
     await waitFor(() => screen.getByText('Sarah D.'))
     expect(screen.queryByText(/-\d+m/)).not.toBeInTheDocument()
@@ -51,6 +56,7 @@ describe('QueueView countdown', () => {
   })
 
   it('never shows a negative minute count even when significantly overdue (critical)', async () => {
+    const epoch = new Date(Date.now() - 25 * 60_000).toISOString()
     mockFetch([
       {
         id: '1',
@@ -59,10 +65,10 @@ describe('QueueView countdown', () => {
         party_size: 2,
         phone: null,
         paid: false,
-        checked_in_at: new Date(Date.now() - 25 * 60_000).toISOString(),
+        checked_in_at: epoch,
         status: 'waiting',
       },
-    ])
+    ], { queue_epoch_at: epoch })
     render(<QueueView />)
     await waitFor(() => screen.getByText('Sarah D.'))
     expect(screen.queryByText(/-\d+m/)).not.toBeInTheDocument()

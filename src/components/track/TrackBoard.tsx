@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getWaitMinutesForParty } from '@/lib/wait-time'
+import { parseEpochMs } from '@/lib/queue-epoch'
 import type { Party } from '@/types'
 
 function formatName(firstName: string, lastInitial: string): string {
@@ -12,6 +13,7 @@ export default function TrackBoard() {
   const [parties, setParties] = useState<Party[]>([])
   const [smallRate, setSmallRate] = useState(4)
   const [largeRate, setLargeRate] = useState(5)
+  const [epochMs, setEpochMs] = useState(() => Date.now())
 
   const fetchAll = useCallback(async () => {
     try {
@@ -25,6 +27,7 @@ export default function TrackBoard() {
       const fallback = parseFloat(settingsData.avg_min_per_hole ?? '4')
       setSmallRate(parseFloat(settingsData.avg_min_per_hole_small ?? String(fallback)))
       setLargeRate(parseFloat(settingsData.avg_min_per_hole_large ?? String(fallback + 1)))
+      setEpochMs(parseEpochMs(settingsData, Date.now()))
     } catch (e) {
       console.error('fetchAll failed', e)
     }
@@ -50,7 +53,8 @@ export default function TrackBoard() {
       ) : (
         <div className="w-full max-w-md flex flex-col gap-3">
           {parties.map((party, i) => {
-            const wait = Math.round(getWaitMinutesForParty(party, parties, smallRate, largeRate))
+            const wait = Math.round(getWaitMinutesForParty(party, parties, smallRate, largeRate, epochMs))
+            const isNotified = party.status === 'notified'
             return (
               <div
                 key={party.id}
@@ -58,13 +62,15 @@ export default function TrackBoard() {
                   ${i === 0 ? 'bg-rc-green/20 border border-rc-green' : 'bg-white/5'}`}
               >
                 <span className={`text-xl font-black w-6 shrink-0 ${i === 0 ? 'text-rc-green' : 'text-white/40'}`}>
-                  {i + 1}
+                  {isNotified ? '🔔' : i + 1}
                 </span>
                 <span className="flex-1 text-white font-bold truncate">
                   {formatName(party.first_name, party.last_initial)}
                 </span>
                 <span className="font-bold">
-                  {wait === 0 ? (
+                  {isNotified ? (
+                    <span className="text-rc-green animate-pulse">Come in!</span>
+                  ) : wait === 0 ? (
                     <span className="text-rc-green">Now!</span>
                   ) : (
                     <span className="text-white/70">{wait}m</span>

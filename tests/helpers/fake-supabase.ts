@@ -43,9 +43,9 @@ export function makeFakeSupabase(
         matched.forEach(r => Object.assign(r, state.update))
       } else if (state.op === 'delete') {
         if (table === 'parties') {
-          db.parties = db.parties.filter(r => !matched.includes(r as Row))
+          db.parties = db.parties.filter(r => !matched.includes(r as unknown as Row))
         } else {
-          db.settings = db.settings.filter(r => !matched.includes(r as Row))
+          db.settings = db.settings.filter(r => !matched.includes(r as unknown as Row))
         }
       }
       if (state.single) {

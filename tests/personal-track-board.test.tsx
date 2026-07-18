@@ -59,7 +59,14 @@ function mockFetch(
     }
     if (u.includes('/api/settings')) {
       return Promise.resolve({
-        json: async () => ({ avg_min_per_hole_small: '5', avg_min_per_hole_large: '7' }),
+        json: async () => ({
+          avg_min_per_hole_small: '5',
+          avg_min_per_hole_large: '7',
+          // The queue clock started when the front of this fixture checked
+          // in, 11 minutes ago — matching what the server-managed epoch
+          // would hold for this scenario.
+          queue_epoch_at: parties[0].checked_in_at,
+        }),
         ok: true,
       })
     }
@@ -144,7 +151,11 @@ describe('PersonalTrackBoard', () => {
       if (u.includes('/api/settings')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ avg_min_per_hole_small: '5', avg_min_per_hole_large: '7' }),
+          json: async () => ({
+            avg_min_per_hole_small: '5',
+            avg_min_per_hole_large: '7',
+            queue_epoch_at: front.checked_in_at,
+          }),
         })
       }
       return Promise.resolve({ ok: true, json: async () => ({}) })
@@ -174,7 +185,56 @@ describe('PersonalTrackBoard', () => {
       if (u.includes('/api/settings')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ avg_min_per_hole_small: '5', avg_min_per_hole_large: '7' }),
+          json: async () => ({
+            avg_min_per_hole_small: '5',
+            avg_min_per_hole_large: '7',
+            queue_epoch_at: self.checked_in_at,
+          }),
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    }) as unknown as typeof fetch
+
+    render(<PersonalTrackBoard id="self-id" />)
+    await screen.findByText(/grab your putters/i)
+    expect(screen.getByText(/ready for the course/i)).toBeInTheDocument()
+  })
+
+  it('shows the ready screen for a notified party even though they no longer hold a numbered position', async () => {
+    // Fix 1: staff hit "Notify Now" — the guest was called up early, so
+    // their phone must flip to the ready screen even with a fresh clock.
+    const now = Date.now()
+    const self = {
+      id: 'self-id',
+      first_name: 'Sam',
+      last_initial: 'B',
+      party_size: 2,
+      phone: null,
+      checked_in_at: new Date(now - 2 * 60_000).toISOString(),
+      status: 'notified',
+      notified_at: new Date(now).toISOString(),
+    }
+    const behind = {
+      id: 'behind-id',
+      first_name: 'Wes',
+      last_initial: 'K',
+      party_size: 2,
+      phone: null,
+      checked_in_at: new Date(now - 60_000).toISOString(),
+      status: 'waiting',
+    }
+    global.fetch = vi.fn((url: string) => {
+      const u = url.toString()
+      if (u.endsWith('/api/parties/self-id')) return Promise.resolve({ ok: true, json: async () => self })
+      if (u.includes('/api/parties')) return Promise.resolve({ ok: true, json: async () => [self, behind] })
+      if (u.includes('/api/settings')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            avg_min_per_hole_small: '5',
+            avg_min_per_hole_large: '7',
+            queue_epoch_at: new Date(now - 2 * 60_000).toISOString(),
+          }),
         })
       }
       return Promise.resolve({ ok: true, json: async () => ({}) })
