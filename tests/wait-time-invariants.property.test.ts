@@ -175,27 +175,27 @@ function runScenario(seed: number): { events: number; waitChecks: number } {
       // arrival behind them (when the queue wasn't empty).
       if (activeBefore.length > 0) {
         const after = snapshotRawWaits(sim, active(sim), sim.epochMs)
-        for (const [id, w] of before) {
+        before.forEach((w, id) => {
           const w2 = after.get(id)
-          if (w2 === undefined) continue
+          if (w2 === undefined) return
           waitChecks++
           if (Math.abs(w2 - w) > TOL) throw new Error(`seed ${seed}: new arrival changed ${id}'s wait by ${w2 - w}`)
-        }
+        })
       }
     } else if (kind === 'advanceTime') {
       const dtMs = Math.floor(rand() * 15 * 60_000)
       sim.nowMs += dtMs
       const after = snapshotRawWaits(sim, active(sim), sim.epochMs)
-      for (const [id, w] of before) {
+      before.forEach((w, id) => {
         const w2 = after.get(id)
-        if (w2 === undefined) continue
+        if (w2 === undefined) return
         waitChecks++
         const delta = w2 - w
         // Time passing can only ever count waits DOWN, by at most dt.
         if (delta > TOL || delta < -(dtMs / 60_000) - TOL) {
           throw new Error(`seed ${seed}: advancing time by ${dtMs / 60_000}min changed ${id}'s wait by ${delta}`)
         }
-      }
+      })
     } else if (kind === 'checkinNotified') {
       const notified = sim.parties.filter(p => p.status === 'notified')
       const target = notified[randint(rand, 0, notified.length - 1)]
@@ -203,13 +203,13 @@ function runScenario(seed: number): { events: number; waitChecks: number } {
       advanceEpochIfFront(sim, { ...target, status: 'notified' }, activeBefore) // mirrors ready route; always a no-op for notified
       if (sim.epochMs !== epochBefore) throw new Error(`seed ${seed}: epoch moved on notified checkin`)
       const after = snapshotRawWaits(sim, active(sim), sim.epochMs)
-      for (const [id, w] of before) {
-        if (id === target.id) continue
+      before.forEach((w, id) => {
+        if (id === target.id) return
         const w2 = after.get(id)
-        if (w2 === undefined) continue
+        if (w2 === undefined) return
         waitChecks++
         if (Math.abs(w2 - w) > TOL) throw new Error(`seed ${seed}: notified checkin changed ${id}'s wait by ${w2 - w}`)
-      }
+      })
     } else {
       // notifyFront / checkinFront / removeRandom — a party leaves the
       // waiting pool (or the board entirely).
@@ -233,10 +233,10 @@ function runScenario(seed: number): { events: number; waitChecks: number } {
 
       const after = snapshotRawWaits(sim, active(sim), sim.epochMs)
       const clampWindow = sim.nowMs - epochBefore < targetRate * 60_000
-      for (const [id, w] of before) {
-        if (id === target.id) continue
+      before.forEach((w, id) => {
+        if (id === target.id) return
         const w2 = after.get(id)
-        if (w2 === undefined) continue
+        if (w2 === undefined) return
         waitChecks++
         const delta = w2 - w
         if (targetWasNotified) {
@@ -259,7 +259,7 @@ function runScenario(seed: number): { events: number; waitChecks: number } {
             throw new Error(`seed ${seed}: mid-queue removal of ${target.id} changed ${id}'s wait by ${delta}, expected ${expected}`)
           }
         }
-      }
+      })
     }
 
     checkGlobalInvariants(sim, seed)
