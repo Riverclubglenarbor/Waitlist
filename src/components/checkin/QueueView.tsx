@@ -1,11 +1,11 @@
 'use client'
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getRawWaitMinutesForParty, getPartyPosition } from '@/lib/wait-time'
 import { parseEpochMs } from '@/lib/queue-epoch'
 import type { Party } from '@/types'
 
-type ActionState = { id: string; type: 'checkin' | 'resend' | 'paid' | 'remove' | 'notify' | 'undo-notify' } | null
+type ActionState = { id: string; type: 'checkin' | 'paid' | 'remove' | 'notify' | 'undo-notify' } | null
 
 interface QueueViewProps {
   refreshKey?: number
@@ -25,7 +25,6 @@ export default function QueueView({ refreshKey }: QueueViewProps) {
   const [now, setNow] = useState(() => Date.now())
   const [loading, setLoading] = useState<ActionState>(null)
   const [flash, setFlash] = useState<{ id: string; type: 'success' | 'error'; msg: string } | null>(null)
-  const autoResentRef = useRef<Set<string>>(new Set())
 
   // Parties and settings refresh together on every poll — the queue epoch
   // lives in settings and advances on server-side dequeue events, so a
@@ -80,22 +79,6 @@ export default function QueueView({ refreshKey }: QueueViewProps) {
     })
     setLoading(null)
     fetchParties()
-  }
-
-  async function resend(id: string) {
-    setLoading({ id, type: 'resend' })
-    const res = await fetch(`/api/parties/${id}/resend`, { method: 'POST' })
-    setLoading(null)
-    if (res.ok) showFlash(id, 'success', 'Text sent!')
-    else showFlash(id, 'error', 'Failed to send')
-  }
-
-  async function autoResend(id: string, phone: string | null) {
-    if (!phone) return
-    if (autoResentRef.current.has(id)) return
-    autoResentRef.current.add(id)
-    await fetch(`/api/parties/${id}/resend`, { method: 'POST' })
-    showFlash(id, 'success', 'Auto-text sent!')
   }
 
   async function notifyParty(id: string) {
@@ -161,9 +144,6 @@ export default function QueueView({ refreshKey }: QueueViewProps) {
         const isFront = position === 1
         const isOverdue = remainingSec < 0
         const isCritical = remainingSec <= -120 // -2 minutes
-
-        // Trigger auto-resend at -2 min
-        if (isCritical) autoResend(party.id, party.phone)
 
         return (
           <div
@@ -260,16 +240,6 @@ export default function QueueView({ refreshKey }: QueueViewProps) {
                              hover:bg-green-500 active:scale-[0.97] disabled:opacity-40"
                 >
                   {isLoading && loading?.type === 'checkin' ? '…' : '✓ Check In'}
-                </button>
-
-                <button
-                  onClick={() => resend(party.id)}
-                  disabled={!!loading || !party.phone}
-                  className="border border-rc-navy text-rc-navy text-sm font-semibold
-                             px-3 py-2 rounded-xl transition-all duration-150
-                             hover:bg-rc-navy hover:text-white active:scale-[0.97] disabled:opacity-40"
-                >
-                  {isLoading && loading?.type === 'resend' ? '…' : '↩ Resend'}
                 </button>
 
                 <button
