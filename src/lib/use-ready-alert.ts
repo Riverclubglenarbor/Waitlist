@@ -50,23 +50,47 @@ export function useReadyAlert(partyId: string, isReady: boolean) {
     setPreference(readPreference(partyId))
   }, [partyId])
 
+  function unlockAudio(): AudioContext | null {
+    if (audioCtxRef.current) return audioCtxRef.current
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!Ctx) return null
+    const ctx = new Ctx()
+    ctx.resume().catch(() => {})
+    audioCtxRef.current = ctx
+    return ctx
+  }
+
   function choose(pref: 'yes' | 'no') {
     setPreference(pref)
     window.localStorage.setItem(storageKey(partyId), pref)
-    if (pref === 'yes') {
-      const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-      if (Ctx) {
-        const ctx = new Ctx()
-        ctx.resume().catch(() => {})
-        audioCtxRef.current = ctx
-      }
-    }
+    if (pref === 'yes') unlockAudio()
   }
+
+  // Re-arm case: preference was already 'yes' from an earlier visit (this
+  // tab reloaded, or iOS evicted a backgrounded tab during the wait — both
+  // routine on a page someone has open for 10-40 minutes), so there was no
+  // fresh tap THIS load to unlock audio. Grab the next real tap/touch
+  // anywhere on the page as that unlock instead of waiting for one that
+  // will never come from the (already-dismissed) prompt.
+  useEffect(() => {
+    if (preference !== 'yes' || audioCtxRef.current) return
+    const onFirstInteraction = () => unlockAudio()
+    document.addEventListener('pointerdown', onFirstInteraction, { once: true })
+    return () => document.removeEventListener('pointerdown', onFirstInteraction)
+  }, [preference])
 
   useEffect(() => {
     if (isReady && !wasReadyRef.current && preference === 'yes') {
       const ctx = audioCtxRef.current
-      if (ctx) playChime(ctx)
+      if (ctx) {
+        // iOS suspends the context on lock/background; resume before
+        // playing rather than assuming it's still running from unlock time.
+        if (ctx.state !== 'running') {
+          ctx.resume().then(() => playChime(ctx)).catch(() => {})
+        } else {
+          playChime(ctx)
+        }
+      }
       if (typeof navigator.vibrate === 'function') navigator.vibrate([200, 100, 200])
     }
     wasReadyRef.current = isReady
