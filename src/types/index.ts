@@ -11,6 +11,10 @@ export interface Party {
   checked_in_at: string
   notified_at?: string
   followup_sent_at?: string
+  // Set on the party who moved UP as the result of a voluntary swap-down by
+  // the party ahead of them (POST /api/parties/[id]/swap-down). Drives the
+  // one-time "You got moved up!" banner on their tracking page.
+  moved_up_notice_at?: string
   status: PartyStatus
 }
 
