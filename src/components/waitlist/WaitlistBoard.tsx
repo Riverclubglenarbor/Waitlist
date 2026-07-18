@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { getQueueWaitMinutes, getWaitMinutesForParty } from '@/lib/wait-time'
+import { getWaitMinutesForParty } from '@/lib/wait-time'
 import EmptyBoard from './EmptyBoard'
 import OdometerNumber from './OdometerNumber'
 import Image from 'next/image'
@@ -54,7 +54,13 @@ export default function WaitlistBoard() {
 
   if (parties.length === 0) return <EmptyBoard />
 
-  const totalWait = Math.round(getQueueWaitMinutes(parties, smallRate, largeRate))
+  // The hero number is the wait of the most recently checked-in party — a
+  // real guest's actual number — not getQueueWaitMinutes's hypothetical
+  // "what would a brand-new arrival wait" estimate. /api/parties returns
+  // parties ordered by checked_in_at ascending, so the last element is the
+  // newest active party.
+  const lastParty = parties[parties.length - 1]
+  const totalWait = Math.round(getWaitMinutesForParty(lastParty, parties, smallRate, largeRate))
 
   return (
     <div className="h-screen bg-rc-navy flex flex-col items-center px-8 py-10" style={{ fontFamily: 'var(--font-montserrat), sans-serif' }}>
