@@ -1291,6 +1291,94 @@ Note the comment inline above: `wasFrontOfQueue` in `src/lib/queue-epoch.ts` (Ta
 
 ---
 
+## Phase 2 Addendum Revision 2 — fixes from adversarial review (before any Phase 2 code is written)
+
+A second AI reviewer (independent, adversarial) read the full plan above and found five real problems in the Notify addendum specifically. All five must be fixed as part of Tasks 4-9 — do not build the addendum as originally written.
+
+### Fix 1 (blocker): a notified party must still be able to self-checkin at hole 1
+
+The amended `getPartyPosition` (Task 5 addendum) returns `0` for a `notified` party since it now only counts `waiting` parties. But `src/app/api/parties/[id]/ready/route.ts` gates on `position === 1`, and Task 2's `PersonalTrackBoard.tsx` gate is `wait <= 0 && position === 1` — so a notified guest's own phone would show "Position #0" and lose their ready button entirely, exactly backwards from the feature's purpose.
+
+Fix both gates to also accept `status === 'notified'` directly, independent of the numeric position:
+- `ready/route.ts`: change the position check to `if (party.status !== 'notified' && position !== 1) { return 409 }`.
+- `PersonalTrackBoard.tsx`: change the ready-screen condition to `(wait <= 0 && position === 1) || self?.status === 'notified'`. Also feed `self?.status === 'notified'` into the `isReady` boolean passed to Phase 3's `useReadyAlert` — the chime should fire the moment a party is notified, not just when their own timer hits zero, since being notified IS "your turn" from the guest's perspective.
+
+### Fix 2: crash when notifying the last waiting party
+
+`wasFrontOfQueue` (Task 4, amended per the Notify addendum to sort only `waiting` parties) currently checks `activeBeforeChange.length === 0` BEFORE filtering. Reorder: filter to `status === 'waiting'` first, then check `.length === 0` on the filtered result, then sort. Add a test: notifying the only remaining `waiting` party when several `notified`/`playing` parties also exist in the snapshot must not throw.
+
+### Fix 3: Notify needs an explicit, symmetric Undo — don't allow silent reversal through PATCH
+
+Because notifying a party removes their rate from everyone's math and advances the epoch by that same amount, reverting `status` from `notified` back to `waiting` through the generic `PATCH /api/parties/[id]` route (which currently allows any `status` value in its `allowedFields`) would silently re-add their rate to everyone's wait WITHOUT rolling the epoch back — a permanent, wrong jump for exactly the population this whole project is trying to stop.
+
+Two changes:
+- In `PATCH /api/parties/[id]` (Task 7), reject `status: 'waiting'` as a target value when the row's current status is `notified` — return `400 { error: 'Use /api/parties/[id]/undo-notify to reverse a Notify' }`. Only that dedicated endpoint may transition `notified` back to `waiting`.
+- Create `src/app/api/parties/[id]/undo-notify/route.ts`: symmetric to the notify route — verifies current status is `notified`, sets it back to `waiting`, and calls a new `revertQueueEpochForUndoNotify(supabase, party, smallRate, largeRate)` in `queue-epoch-server.ts` that does the exact inverse of `advanceQueueEpochIfFront`: reads current epoch, subtracts (not adds) `rate(party) * 60_000`, upserts. Add a "↩ Undo Notify" button in `QueueView.tsx`, shown only on rows with `status === 'notified'`. Add a test proving notify-then-undo-notify returns the epoch to exactly its original value and every other party's wait to exactly its pre-notify value.
+- Out of scope for this pass (explicitly deferred, not silently dropped): automatic no-show timeout for a `notified` party who never actually checks in. Staff can already `DELETE`/Remove them manually if they clearly aren't coming — that's the accepted fallback for now. Set `notified_at: new Date().toISOString()` on the notify route's update (the field already exists on `Party` per `src/types/index.ts`) so this is available to build on later without another migration.
+
+### Fix 4: cascade Notify/Check-In/Remove across split-party siblings
+
+A party larger than `MAX_GROUP_SIZE` (6) auto-splits into multiple rows at insert time (`src/app/api/parties/route.ts`, groups labeled `"${first_name} 1"`, `"${first_name} 2"`, etc., same `last_initial`, checked in milliseconds apart). Today, notifying or checking in one sibling leaves the other(s) sitting in the normal queue as if they were an unrelated party — group 2 of the split would immediately become "the front of the queue" in its own right.
+
+Add a shared helper `src/lib/party-siblings.ts`:
+
+```ts
+import type { Party } from '@/types'
+
+// Matches the split-labeling convention from POST /api/parties: same
+// last_initial, and first_name of the form "<base> <N>" sharing the same
+// <base> — e.g. "Sarah 1" and "Sarah 2" are siblings of the same original
+// check-in. A party whose first_name has no trailing " <number>" has no
+// siblings (the common case: nobody split).
+function splitBaseName(firstName: string): string | null {
+  const match = firstName.match(/^(.*) (\d+)$/)
+  return match ? match[1] : null
+}
+
+export function findSiblings(party: Party, allParties: Party[]): Party[] {
+  const base = splitBaseName(party.first_name)
+  if (!base) return []
+  return allParties.filter(p =>
+    p.id !== party.id &&
+    p.last_initial === party.last_initial &&
+    splitBaseName(p.first_name) === base
+  )
+}
+```
+
+Wire this into the notify, check-in (`PATCH`), and remove (`DELETE`) routes: after successfully transitioning the primary party, look up its siblings via `findSiblings` among the still-`waiting`/`notified` set, and apply the identical transition to each of them too (each sibling still triggers its own correct `advanceQueueEpochIfFront` call if it was independently the front — in practice a sibling is essentially never separately "front" once cascading is in place, since they move together, but the check is cheap and correct to leave in rather than special-cased away). Add a test: a 8-person party split into two rows, notifying either row notifies both.
+
+### Fix 5: make the epoch read-modify-write atomic
+
+`advanceQueueEpochIfFront` and `revertQueueEpochForUndoNotify` (Fix 3) each do an unprotected read-then-upsert of `queue_epoch_at` — under real concurrent requests (two staff actions landing at once, or a staff action racing a guest's self-ready) this is a lost-update race, and a failed upsert currently fails silently (no error surfaced, no retry), which is exactly the "one source of truth silently drifted" failure mode `SKILL.md` documents happening three separate times already in this codebase's history.
+
+Fix: replace the two-step select-then-upsert with a single atomic Postgres function, called via Supabase RPC instead of two round-trip queries. Add to a new migration file `supabase/migrations/<timestamp>_advance_queue_epoch_function.sql`:
+
+```sql
+create or replace function advance_queue_epoch(delta_minutes numeric)
+returns timestamptz
+language plpgsql
+as $$
+declare
+  current_val timestamptz;
+  new_val timestamptz;
+begin
+  select value::timestamptz into current_val from settings where key = 'queue_epoch_at';
+  if current_val is null then
+    current_val := now();
+  end if;
+  new_val := current_val + make_interval(mins => delta_minutes);
+  insert into settings (key, value) values ('queue_epoch_at', new_val::text)
+    on conflict (key) do update set value = excluded.value;
+  return new_val;
+end;
+$$;
+```
+
+Update `advanceQueueEpochIfFront`/`revertQueueEpochForUndoNotify` to call `supabase.rpc('advance_queue_epoch', { delta_minutes: rateMinutes })` (positive for advance, negative for revert) instead of the manual select/upsert — this makes the whole read-modify-write a single atomic statement on Postgres's side, closing the race. If the RPC call errors, the route must return a 500 and NOT report success to the client — surface the failure instead of swallowing it, so staff know to retry rather than the board silently going wrong. Note in the migration file, per `SKILL.md`'s process, that this needs to actually be applied to the live Supabase project (no CLI access confirmed available — same constraint as the dormant `sms-dispatch` function; flag this explicitly to Ben rather than assuming it's been applied).
+
+---
+
 ## Plan Self-Review Notes
 
 - **Spec coverage:** Speed-up button (Task 1), ready-button position gate (Task 2), public-board last-checked-in display (Task 3), zero-jump queue math (Tasks 4-9), sound/vibration alert with iOS-safe unlock (Tasks 10-11) — all four conversation requirements covered.
