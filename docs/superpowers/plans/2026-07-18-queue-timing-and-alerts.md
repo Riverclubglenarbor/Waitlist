@@ -1379,6 +1379,44 @@ Update `advanceQueueEpochIfFront`/`revertQueueEpochForUndoNotify` to call `supab
 
 ---
 
+## Phase 4 — Guest self-service "move down 1 spot" swap
+
+**Requirement (added after Phases 1-3 shipped):** a guest running behind can voluntarily swap places with whoever's directly behind them in line, from their own tracking page. Popup copy is exact: **"Would you like to move down 1 spot on the waitlist?"** Yes/No. The party who moves up as a result sees a **"You got moved up!"** banner on their own tracking page next poll — an on-screen notice, not a text message (texting is permanently off per Phase 3's Resend removal).
+
+### Why this is safe to bolt on without touching the epoch fix
+
+The whole point of the Phase 2 fix was decoupling "elapsed time" from any specific party's `checked_in_at` — elapsed now comes purely from the persisted `queue_epoch_at`, advanced only on real front-of-queue dequeues. A swap changes nothing about who is active or who has left; it only reorders two `waiting` parties' `checked_in_at` values relative to each other. Since `queue_epoch_at` is untouched, and the two swapped parties' combined rate contribution to everyone behind them is unchanged (same two rates, just reordered internally), **every party except the two being swapped is provably unaffected** — not just "shouldn't change" but structurally cannot change, since `elapsedSinceEpoch` doesn't reference `checked_in_at` at all anymore and `calculateWaitMinutes`'s sum is order-independent. The two swapped parties' own numbers trade places exactly. This must be proven with a test, not just asserted — see the property-test extension below.
+
+### Files
+
+- Modify: `src/types/index.ts` — add `moved_up_notice_at?: string` to the `Party` interface.
+- Create: `supabase/migrations/20260718180000_add_moved_up_notice_at.sql`:
+  ```sql
+  alter table parties add column if not exists moved_up_notice_at timestamptz;
+  ```
+  Same deploy constraint as the Phase 2 RPC migration — no confirmed Supabase CLI access in this environment; this needs to be run manually via the Supabase dashboard SQL editor before the swap feature can work live. Say so clearly in the final report, do not assume it's been applied.
+- Create: `src/app/api/parties/[id]/swap-down/route.ts` — POST, no body. Logic:
+  1. Fetch all `status IN ('waiting', 'notified')` parties (same shape as `ready/route.ts`).
+  2. Find `party` by `params.id`. 404 if missing.
+  3. Reject with 409 if `party.status !== 'waiting'` (`{ error: 'Not eligible to move — already notified or checked in' }`) — a party who's already been staff-Notified must not be able to un-jump themselves.
+  4. Determine the ordered `waiting`-only list using the exact same comparator as `getPartyPosition`/`wasFrontOfQueue` (checked_in_at ascending, tie-broken by id — import and reuse, don't re-derive). Find `party`'s index in that list. If it's the last index (nobody behind), 409 `{ error: 'No one behind you to swap with' }`.
+  5. The party immediately after it in that ordered list is `nextParty`. (It will always have `status === 'waiting'` by construction of the ordered list — `notified` parties are excluded from it already, so a guest can never accidentally swap with someone staff already called up; this is a natural consequence of reusing the existing comparator, not a special case.)
+  6. Swap `checked_in_at` between `party` and `nextParty` with conditional updates guarding both rows haven't changed since the fetch (`.eq('checked_in_at', party.checked_in_at)` / `.eq('checked_in_at', nextParty.checked_in_at)` in addition to `.eq('id', ...)`) — if either conditional update affects zero rows (someone else already changed one of them), roll back whichever update DID succeed and return 409 `{ error: 'Line changed — try again' }` rather than leaving a half-swapped pair. (Simplest correct implementation: read both rows' current values into local vars first, then do both updates; if either update's returned row count is 0, re-fetch and redo the second update in reverse to restore the first party's original `checked_in_at` before returning the error.)
+  7. On full success, set `moved_up_notice_at: new Date().toISOString()` on `nextParty` (the one who moved up) in the same update from step 6, not a separate write.
+  8. Do NOT touch `queue_epoch_at` anywhere in this route.
+- Modify `src/components/track/PersonalTrackBoard.tsx`:
+  - Compute eligibility: `canMoveDown = self?.status === 'waiting' && wait > 0` (not yet ready/notified) `&& position < <count of waiting parties>` — simplest correct check: attempt the fetch of siblings isn't needed client-side; just show the link whenever `self.status === 'waiting' && wait > 0`, and let the route's own 409 for "no one behind" handle the rare last-in-line case gracefully (show the 409's error message in the existing `readyError`-style small text, don't hide the button preemptively based on guessed position math — simpler and can't drift out of sync with the real server-side ordering).
+  - Add a small text link/button below the position display, e.g. "Running behind?", opening a confirm popup styled like the existing `confirmingAddTime` modal pattern in `src/app/checkin/page.tsx` (centered card, dark overlay) with the exact copy **"Would you like to move down 1 spot on the waitlist?"** and Yes/No buttons. Yes calls `POST /api/parties/${id}/swap-down`, then re-fetches.
+  - Moved-up banner: when `self?.moved_up_notice_at` is present AND its value hasn't already been shown (compare against a `localStorage` key `river-club-moved-up-shown:${id}` storing the last-shown timestamp value, same pattern as `use-ready-alert.ts`'s preference storage), show a dismissible banner reading **"You got moved up!"** for a few seconds, then record that timestamp value as shown so it doesn't reappear on the next poll — but WILL show again if a later swap produces a new, different `moved_up_notice_at` value.
+
+### Tests required before this is done
+
+- `tests/parties-swap-down-route.test.ts`: eligible swap succeeds and swaps `checked_in_at`; sets `moved_up_notice_at` on the correct party only; rejects when caller is `notified`; rejects when caller is last in the waiting list; rejects (and does not partially apply) when the target row changed underneath the request (race guard); confirms `queue_epoch_at` in settings is byte-for-byte unchanged before and after a successful swap.
+- `tests/personal-track-board.test.tsx`: shows the "Running behind?" link only when eligible; popup shows the exact required copy; Yes triggers the POST and a No/dismiss does not; the moved-up banner appears once per new `moved_up_notice_at` value and does not reappear on subsequent polls with the same value.
+- **Extend `tests/wait-time-invariants.property.test.ts`** (do not create a separate file) with a new random event type, "swap-down between two random adjacent waiting parties," in the same randomized event sequence used for the existing 220-scenario run. After every swap event specifically, assert: every active party's wait EXCEPT the two swapped parties is identical, to full floating-point precision, to its value immediately before the swap; and the two swapped parties' wait values have traded places exactly. This is the proof that answers "this cannot be rebroken" — a hand-picked example test is not sufficient on its own; re-running this mission-critical invariant 200+ times across random queue shapes is what actually earns confidence.
+
+---
+
 ## Plan Self-Review Notes
 
 - **Spec coverage:** Speed-up button (Task 1), ready-button position gate (Task 2), public-board last-checked-in display (Task 3), zero-jump queue math (Tasks 4-9), sound/vibration alert with iOS-safe unlock (Tasks 10-11) — all four conversation requirements covered.
