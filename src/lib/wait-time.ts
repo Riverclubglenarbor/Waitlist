@@ -30,6 +30,21 @@ function elapsedSinceEpoch(epochMs: number, now: number): number {
   return Math.max(0, (now - epochMs) / 60_000)
 }
 
+// Same tie-break as getPartyPosition/wasFrontOfQueue/compareQueueOrder
+// (checked_in_at asc, ties broken by id) — kept as one shared predicate so
+// "who's ahead of whom" can never drift between the position math and the
+// wait-time math. Bug 2026-07-18: getRawWaitMinutesForParty used to compare
+// checked_in_at with plain `<`, so two parties sharing an identical
+// timestamp (e.g. an auto-split large party inserted in the same request)
+// were BOTH treated as having nobody ahead of them for wait purposes, even
+// though getPartyPosition correctly gave them distinct positions via the id
+// tiebreak — silently undercounting the id-later party's wait by exactly
+// the id-earlier party's rate.
+function isAheadOf(a: Pick<Party, 'checked_in_at' | 'id'>, party: Pick<Party, 'checked_in_at' | 'id'>): boolean {
+  const byTime = a.checked_in_at.localeCompare(party.checked_in_at)
+  return byTime !== 0 ? byTime < 0 : a.id.localeCompare(party.id) < 0
+}
+
 export function calculateWaitMinutes(
   parties: Pick<Party, 'party_size'>[],
   smallRate: number,
@@ -61,7 +76,7 @@ export function getRawWaitMinutesForParty(
   epochMs: number,
   now: number = Date.now()
 ): number {
-  const ahead = queuedParties(allParties).filter(p => p.checked_in_at < party.checked_in_at)
+  const ahead = queuedParties(allParties).filter(p => isAheadOf(p, party))
   const elapsed = elapsedSinceEpoch(epochMs, now)
   return MINIMUM_WAIT_MINUTES + calculateWaitMinutes(ahead, smallRate, largeRate) - elapsed
 }

@@ -192,6 +192,23 @@ describe('getWaitMinutesForParty — shared queue floor', () => {
   // scenario is now covered by tests/queue-epoch-server.test.ts, which tests
   // the epoch-advance behavior that replaces it.
 
+  it('breaks identical checked_in_at ties by id, matching getPartyPosition — the id-later party still counts the id-earlier one as ahead of it', () => {
+    // getPartyPosition and wasFrontOfQueue both tie-break an exact
+    // checked_in_at collision by id (see the "breaks ties" test above and
+    // tests/queue-epoch.test.ts) — this happens for real with an
+    // auto-split large party inserted in the same request. The wait-time
+    // math must use the identical tiebreak, or a tied party's own wait
+    // silently drops the rate of whoever's actually ahead of it by id.
+    const now = Date.now()
+    const sameTime = new Date(now).toISOString()
+    const a = makeParty({ id: 'aaa', party_size: 2, checked_in_at: sameTime })
+    const b = makeParty({ id: 'bbb', party_size: 2, checked_in_at: sameTime })
+    expect(getPartyPosition(a, [b, a])).toBe(1)
+    expect(getPartyPosition(b, [b, a])).toBe(2)
+    expect(getWaitMinutesForParty(a, [b, a], 5, 7, now, now)).toBe(10) // nobody ahead of a
+    expect(getWaitMinutesForParty(b, [b, a], 5, 7, now, now)).toBe(15) // 10 + a's rate (5)
+  })
+
   it('a notified party mid-queue no longer counts toward the wait of parties behind them', () => {
     const now = Date.now()
     const first = makeParty({ id: 'a', party_size: 2, checked_in_at: new Date(now).toISOString() })

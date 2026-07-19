@@ -46,6 +46,7 @@ export default function SettingsForm() {
   const [settings, setSettings] = useState<Settings>({})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => {
     fetch('/api/settings').then(r => r.json()).then(setSettings)
@@ -54,11 +55,29 @@ export default function SettingsForm() {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    await fetch('/api/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settings),
-    })
+    setSaveError('')
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      })
+      if (!res.ok) {
+        // Bug found 2026-07-18: this used to ignore the response entirely
+        // and always show "Saved!" -- a rejected save (e.g. a blank or
+        // non-numeric per-hole rate, now validated server-side) looked
+        // identical to a real one, so a bad value could sit in the form
+        // unsaved while the admin believed it had gone through.
+        const data = await res.json().catch(() => ({}))
+        setSaveError(data.error ?? 'Save failed — check the highlighted values and try again')
+        setSaving(false)
+        return
+      }
+    } catch {
+      setSaveError('Network error — check connection and try again')
+      setSaving(false)
+      return
+    }
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
@@ -97,6 +116,9 @@ export default function SettingsForm() {
       <p className="text-white/40 text-xs">
         Variables: {'{name}'} {'{wait}'} {'{position}'}
       </p>
+      {saveError && (
+        <p className="text-red-400 text-sm font-semibold">{saveError}</p>
+      )}
       <button
         type="submit"
         disabled={saving}

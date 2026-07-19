@@ -162,4 +162,70 @@ describe('DELETE /api/parties/[id]', () => {
     expect(fake.rpcCalls).toHaveLength(2)
     expect(new Date(fake.getSetting('queue_epoch_at')!).getTime()).toBe(t0 + (5 + 4) * 60_000)
   })
+
+  // Bug found 2026-07-18 (post-incident audit): DELETE used to remove the
+  // row blind (a delete matching zero rows is NOT an error) and then
+  // advance the epoch off a pre-delete snapshot. A double-fired Remove —
+  // two requests both snapshotting the party as waiting-front — therefore
+  // advanced the epoch TWICE for one departure, permanently inflating the
+  // whole queue's waits by the removed party's rate. Same lost-update class
+  // as the live Speed Up incident. The fake's thenables execute at each
+  // await, so Promise.all interleaves the two requests exactly like the
+  // real race: both snapshots are taken before either delete lands.
+  it('double-fired removes advance the epoch exactly once', async () => {
+    const front = makeParty({ id: 'a', party_size: 2, checked_in_at: new Date(t0).toISOString() })
+    const second = makeParty({ id: 'b', party_size: 2, checked_in_at: new Date(t0 + 60_000).toISOString() })
+    fake = makeFakeSupabase([front, second], baseSettings)
+
+    const [res1, res2] = await Promise.all([
+      DELETE(new Request('http://localhost'), { params: { id: 'a' } }),
+      DELETE(new Request('http://localhost'), { params: { id: 'a' } }),
+    ])
+
+    expect(res1.status).toBe(204)
+    expect(res2.status).toBe(204)
+    expect(fake.db.parties.find(p => p.id === 'a')).toBeUndefined()
+    // Epoch advanced exactly ONCE, by the removed party's own rate.
+    expect(fake.rpcCalls).toHaveLength(1)
+    expect(fake.rpcCalls[0].args.delta_minutes).toBe(4)
+    expect(new Date(fake.getSetting('queue_epoch_at')!).getTime()).toBe(t0 + 4 * 60_000)
+  })
+
+  it('does not advance the epoch when the row was already notified at the moment of the delete (Remove racing a Notify)', async () => {
+    const front = makeParty({ id: 'a', party_size: 2, checked_in_at: new Date(t0).toISOString() })
+    const second = makeParty({ id: 'b', party_size: 2, checked_in_at: new Date(t0 + 60_000).toISOString() })
+    fake = makeFakeSupabase([front, second], baseSettings)
+
+    // Simulate a Notify winning the race in the window between this
+    // request's snapshot and its delete: the snapshot reads 'a' as waiting,
+    // but by delete time the live row is 'notified' (and that notify
+    // already advanced the epoch on its own side).
+    const liveRow = fake.db.parties.find(p => p.id === 'a')!
+    const client = fake.client as { from: (t: string) => unknown }
+    const realFrom = client.from.bind(client)
+    let firstPartiesRead = true
+    client.from = (table: string) => {
+      if (table === 'parties' && firstPartiesRead) {
+        firstPartiesRead = false
+        liveRow.status = 'notified'
+        return {
+          select: () => ({
+            in: () =>
+              Promise.resolve({
+                data: [{ ...liveRow, status: 'waiting' }, { ...second }],
+                error: null,
+              }),
+          }),
+        }
+      }
+      return realFrom(table)
+    }
+
+    const res = await DELETE(new Request('http://localhost'), { params: { id: 'a' } })
+    expect(res.status).toBe(204)
+    expect(fake.db.parties.find(p => p.id === 'a')).toBeUndefined()
+    // The notify that flipped them already did the epoch bookkeeping —
+    // deleting the now-notified row must not advance it again.
+    expect(fake.rpcCalls).toHaveLength(0)
+  })
 })

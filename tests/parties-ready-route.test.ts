@@ -79,4 +79,68 @@ describe('POST /api/parties/[id]/ready', () => {
     const res = await POST(req(), { params: { id: 'ghost' } })
     expect(res.status).toBe(404)
   })
+
+  // Bug found 2026-07-18 (post-incident audit): the route used to fire the
+  // status update without checking how many rows it matched, then advance
+  // the epoch unconditionally. A double-tapped "I'm at the tee" button
+  // fires two near-simultaneous requests that BOTH read the party as
+  // waiting-front; the loser's update silently matched zero rows but its
+  // epoch advance still ran — advancing the epoch twice for one departure
+  // and permanently inflating everyone's wait by the party's rate. Same
+  // lost-update class as the live Speed Up incident. The fake's thenables
+  // execute at each await, so Promise.all interleaves the two requests
+  // exactly like the real race: both reads happen before either write.
+  it('double-fired ready taps advance the epoch exactly once', async () => {
+    const front = makeParty({ id: 'a', party_size: 2, checked_in_at: new Date(t0).toISOString() })
+    const second = makeParty({ id: 'b', party_size: 2, checked_in_at: new Date(t0 + 60_000).toISOString() })
+    fake = makeFakeSupabase([front, second], baseSettings)
+
+    const [res1, res2] = await Promise.all([
+      POST(req(), { params: { id: 'a' } }),
+      POST(req(), { params: { id: 'a' } }),
+    ])
+
+    // Both taps report success to the guest (the loser sees the party is
+    // already playing and treats it as a duplicate of its own action)...
+    expect(res1.status).toBe(200)
+    expect(res2.status).toBe(200)
+    expect(fake.db.parties.find(p => p.id === 'a')!.status).toBe('playing')
+    // ...but the epoch advanced exactly ONCE, by the party's own rate.
+    expect(fake.rpcCalls).toHaveLength(1)
+    expect(fake.rpcCalls[0].args.delta_minutes).toBe(4)
+    expect(new Date(fake.getSetting('queue_epoch_at')!).getTime()).toBe(t0 + 4 * 60_000)
+  })
+
+  it('409s (without touching the epoch) when the status changed between read and write for a reason other than a duplicate tap', async () => {
+    const front = makeParty({ id: 'a', party_size: 2, checked_in_at: new Date(t0).toISOString() })
+    fake = makeFakeSupabase([front], baseSettings)
+
+    // Simulate staff notifying the party in the window between this
+    // request's read and its conditional write: patch the fake so the first
+    // parties read returns the stale 'waiting' row while the live table
+    // already says 'notified'.
+    const liveRow = fake.db.parties.find(p => p.id === 'a')!
+    const client = fake.client as { from: (t: string) => unknown }
+    const realFrom = client.from.bind(client)
+    let firstPartiesRead = true
+    client.from = (table: string) => {
+      if (table === 'parties' && firstPartiesRead) {
+        firstPartiesRead = false
+        liveRow.status = 'notified' // flips AFTER the stale read is built below
+        return {
+          select: () => ({
+            in: () => Promise.resolve({ data: [{ ...liveRow, status: 'waiting' }], error: null }),
+          }),
+        }
+      }
+      return realFrom(table)
+    }
+
+    const res = await POST(req(), { params: { id: 'a' } })
+    expect(res.status).toBe(409)
+    // The party keeps its (raced-in) notified status and the epoch is
+    // untouched — the notify that won the race owns that bookkeeping.
+    expect(fake.db.parties.find(p => p.id === 'a')!.status).toBe('notified')
+    expect(fake.rpcCalls).toHaveLength(0)
+  })
 })

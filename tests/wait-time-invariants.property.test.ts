@@ -77,9 +77,29 @@ function randint(rand: () => number, lo: number, hi: number): number {
   return lo + Math.floor(rand() * (hi - lo + 1))
 }
 
+// Same tie-break the real code uses in three places (getPartyPosition,
+// wasFrontOfQueue, wait-time.ts's isAheadOf) — checked_in_at asc, ties
+// broken by id. Kept here so the property test's own "expected" oracle
+// can't silently disagree with the app about queue order.
+function comesBefore(a: Party, b: Party): boolean {
+  const byTime = a.checked_in_at.localeCompare(b.checked_in_at)
+  return byTime !== 0 ? byTime < 0 : a.id.localeCompare(b.id) < 0
+}
+
 function addParty(sim: Sim): void {
   const wasEmpty = active(sim).length === 0
-  sim.lastArrivalMs = Math.max(sim.lastArrivalMs + 1, sim.nowMs)
+  // ~15% of arrivals land on the EXACT same millisecond as the previous
+  // one — mirrors an auto-split large party (POST /api/parties splits one
+  // check-in into multiple rows) sharing a timestamp. This exercises the
+  // id-tiebreak path in getPartyPosition, wasFrontOfQueue, AND
+  // getRawWaitMinutesForParty's isAheadOf — those three must never
+  // disagree about queue order. Bug found 2026-07-18: isAheadOf used to
+  // compare checked_in_at with plain `<`, so a tied party silently didn't
+  // count the party ahead of it (by id) toward its own wait — undetected
+  // by this fuzzer for months because it only ever generated strictly
+  // increasing timestamps, never a real tie.
+  const tie = !wasEmpty && sim.rand() < 0.15
+  if (!tie) sim.lastArrivalMs = Math.max(sim.lastArrivalMs + 1, sim.nowMs)
   const p: Party = {
     id: `p${String(sim.nextId++).padStart(4, '0')}`,
     first_name: 'Rand',
@@ -254,7 +274,7 @@ function runScenario(seed: number): { events: number; waitChecks: number } {
         } else {
           // Mid-queue removal: parties ahead of the removed one are
           // untouched; parties behind drop by exactly the removed rate.
-          const expected = targetSnapshot.checked_in_at < activeBefore.find(p => p.id === id)!.checked_in_at ? -targetRate : 0
+          const expected = comesBefore(targetSnapshot, activeBefore.find(p => p.id === id)!) ? -targetRate : 0
           if (Math.abs(delta - expected) > TOL) {
             throw new Error(`seed ${seed}: mid-queue removal of ${target.id} changed ${id}'s wait by ${delta}, expected ${expected}`)
           }

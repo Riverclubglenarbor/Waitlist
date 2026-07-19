@@ -1,17 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
+import { writeRatesIfUnchanged } from '@/lib/settings-rate-write'
+import { MIN_RATE } from '@/lib/rate-limits'
 
 export const dynamic = 'force-dynamic'
 
 const SUBTRACT_MINUTES = 5
-
-// Floor for the per-hole rates. src/lib/wait-time.ts's queue-pacing formula
-// assumes every party ahead in line contributes a positive number of
-// minutes — a zero or negative rate would make the queue stop advancing (or
-// run backwards) for everyone behind the front. 1 min/hole is the lowest
-// pace that still means something as a golf pace; clamp here instead of
-// letting a rate hit 0 or go negative.
-const MIN_RATE = 1
 
 // Inverse of /api/settings/add-time: used when the course is running faster
 // than the configured pace, so every group in the queue gets pulled
@@ -28,18 +22,31 @@ export async function POST() {
     (settingsRows ?? []).map((r: { key: string; value: string }) => [r.key, r.value])
   )
   const fallback = parseFloat(settings.avg_min_per_hole ?? '4')
-  const smallRate = parseFloat(settings.avg_min_per_hole_small ?? String(fallback))
-  const largeRate = parseFloat(settings.avg_min_per_hole_large ?? String(fallback + 1))
+  const currentSmallRaw = settings.avg_min_per_hole_small ?? String(fallback)
+  const currentLargeRaw = settings.avg_min_per_hole_large ?? String(fallback + 1)
+  const smallRate = parseFloat(currentSmallRaw)
+  const largeRate = parseFloat(currentLargeRaw)
 
   const newSmallRate = Math.max(MIN_RATE, smallRate - SUBTRACT_MINUTES)
   const newLargeRate = Math.max(MIN_RATE, largeRate - SUBTRACT_MINUTES)
   const clamped = newSmallRate === MIN_RATE || newLargeRate === MIN_RATE
 
-  const { error: writeError } = await supabase.from('settings').upsert([
-    { key: 'avg_min_per_hole_small', value: String(newSmallRate) },
-    { key: 'avg_min_per_hole_large', value: String(newLargeRate) },
-  ])
-  if (writeError) return NextResponse.json({ error: writeError.message }, { status: 500 })
+  const result = await writeRatesIfUnchanged(
+    supabase,
+    {
+      small: (settingsRows ?? []).some(r => r.key === 'avg_min_per_hole_small'),
+      large: (settingsRows ?? []).some(r => r.key === 'avg_min_per_hole_large'),
+    },
+    { small: currentSmallRaw, large: currentLargeRaw },
+    { small: String(newSmallRate), large: String(newLargeRate) }
+  )
+  if (result.error) return NextResponse.json({ error: result.error }, { status: 500 })
+  if (result.conflict) {
+    return NextResponse.json(
+      { error: 'Rate changed by someone else — try again' },
+      { status: 409 }
+    )
+  }
 
   return NextResponse.json({
     avg_min_per_hole_small: newSmallRate,

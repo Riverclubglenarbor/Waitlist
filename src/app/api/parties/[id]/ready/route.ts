@@ -32,13 +32,40 @@ export async function POST(
     return NextResponse.json({ error: 'Not your turn yet' }, { status: 409 })
   }
 
-  const { error: updateError } = await supabase
+  // Conditioned on the exact status we just read, with .select() so we can
+  // see whether OUR update actually transitioned the row. Bug found
+  // 2026-07-18 (post-incident audit): this used to fire the update without
+  // checking how many rows it matched and then advance the epoch
+  // unconditionally — so a double-tapped ready button (two near-simultaneous
+  // requests both reading the party as waiting-front) advanced the epoch
+  // TWICE for one departure, permanently inflating everyone's wait by the
+  // party's rate. Same lost-update class as the live Speed Up incident.
+  // Whichever racing request wins the conditional update owns the epoch
+  // bookkeeping; the loser must not touch it.
+  const { data: transitioned, error: updateError } = await supabase
     .from('parties')
     .update({ status: 'playing' })
     .eq('id', params.id)
-    .in('status', ['waiting', 'notified']) // race guard
+    .eq('status', party.status)
+    .select()
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
+  if (!transitioned || transitioned.length === 0) {
+    const { data: current } = await supabase
+      .from('parties')
+      .select('*')
+      .eq('id', params.id)
+      .single()
+    const cur = current as Party | null
+    if (cur && cur.status === 'playing') {
+      // A duplicate tap's first request already checked them in — report
+      // success without double-advancing the epoch.
+      return NextResponse.json({ ok: true })
+    }
+    // Status flipped between our read and our write (e.g. staff notified or
+    // removed them) — let the client re-read and try again.
+    return NextResponse.json({ error: 'Status just changed — try again' }, { status: 409 })
+  }
 
   const { data: settingsRows } = await supabase.from('settings').select('*')
   const settings: Settings = Object.fromEntries(

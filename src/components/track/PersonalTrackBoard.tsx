@@ -25,6 +25,10 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
   // re-render, so two taps in the same event tick would both slip through
   // and double-swap this guest two spots instead of one.
   const swapDownBusy = useRef(false)
+  // Same synchronous guard for the ready button — a double-tap on "I'm at
+  // the tee" used to fire two /ready POSTs (the server now also refuses to
+  // double-advance the epoch, but there's no reason to send the request).
+  const readyBusy = useRef(false)
 
   const fetchAll = useCallback(async () => {
     try {
@@ -104,6 +108,8 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
       setConfirming(true)
       return
     }
+    if (readyBusy.current) return
+    readyBusy.current = true
     setReadyError('')
     try {
       const res = await fetch(`/api/parties/${id}/ready`, { method: 'POST' })
@@ -116,6 +122,7 @@ export default function PersonalTrackBoard({ id }: { id: string }) {
     } catch {
       setReadyError('Network error — check connection')
     } finally {
+      readyBusy.current = false
       setConfirming(false)
     }
   }

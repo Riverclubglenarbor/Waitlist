@@ -152,20 +152,38 @@ export async function DELETE(
 ) {
   const supabase = createServerClient()
 
-  const [{ data: active }, { data: settingsRows }, { data: partyBeingDeleted }] = await Promise.all([
+  const [{ data: active }, { data: settingsRows }] = await Promise.all([
     supabase.from('parties').select('*').in('status', ['waiting', 'notified']),
     supabase.from('settings').select('*'),
-    supabase.from('parties').select('*').eq('id', params.id).single(),
   ])
 
-  const { error } = await supabase.from('parties').delete().eq('id', params.id)
+  // .select() so we get back the row THIS request actually deleted — and
+  // its status at that exact moment. Bug found 2026-07-18 (post-incident
+  // audit): this used to delete blind and advance the epoch off a
+  // pre-delete snapshot; a delete matching zero rows is not an error, so a
+  // double-fired Remove (two requests both snapshotting the party as
+  // waiting-front) advanced the epoch TWICE for one departure — permanent
+  // wait inflation for the whole queue, same lost-update class as the live
+  // Speed Up incident. Only the request whose delete really removed the row
+  // may advance.
+  const { data: deletedRows, error } = await supabase
+    .from('parties')
+    .delete()
+    .eq('id', params.id)
+    .select()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const deleted = partyBeingDeleted as Party | null
+  const deleted = ((deletedRows ?? [])[0] ?? null) as Party | null
   if (deleted && (deleted.status === 'waiting' || deleted.status === 'notified')) {
     const { smallRate, largeRate } = parseRates(settingsRows)
     try {
-      await advanceQueueEpochIfFront(supabase, deleted, (active ?? []) as Party[], smallRate, largeRate)
+      // Advance only if the row was still WAITING when we deleted it. If a
+      // racing Notify flipped it to 'notified' after our snapshot, that
+      // notify already advanced the epoch for this party — advancing here
+      // too (as the old snapshot-based check did) would double-count them.
+      if (deleted.status === 'waiting') {
+        await advanceQueueEpochIfFront(supabase, deleted, (active ?? []) as Party[], smallRate, largeRate)
+      }
 
       // Cascade removal across split siblings, front-to-back (see PATCH).
       const siblings = findSiblings(deleted, (active ?? []) as Party[]).sort(compareQueueOrder)
@@ -176,11 +194,19 @@ export async function DELETE(
           .in('status', ['waiting', 'notified'])
         const stillActive = ((freshActive ?? []) as Party[]).find(p => p.id === sibling.id)
         if (!stillActive) continue
-        const { error: sibError } = await supabase.from('parties').delete().eq('id', sibling.id)
+        const { data: sibDeletedRows, error: sibError } = await supabase
+          .from('parties')
+          .delete()
+          .eq('id', sibling.id)
+          .select()
         if (sibError) continue
+        const sibDeleted = ((sibDeletedRows ?? [])[0] ?? null) as Party | null
+        // Same guard as the primary: only a delete that actually removed a
+        // still-waiting row advances the epoch for that sibling.
+        if (!sibDeleted || sibDeleted.status !== 'waiting') continue
         await advanceQueueEpochIfFront(
           supabase,
-          stillActive,
+          sibDeleted,
           (freshActive ?? []) as Party[],
           smallRate,
           largeRate
